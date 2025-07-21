@@ -1,20 +1,22 @@
 # RPI PXE Manager
 
-Raspberry Pi PXE Boot Manager - 편리한 UI/UX로 네트워크 부팅 환경을 쉽게 구성할 수 있는 프로그램입니다.
+Raspberry Pi PXE Boot Manager - Python 기반의 웹 UI로 네트워크 부팅 환경을 쉽게 구성할 수 있는 프로그램입니다.
 
 ## 개요
 
-이 프로젝트는 Raspberry Pi 4의 PXE 네트워크 부팅 환경을 쉽게 구성하고 관리할 수 있도록 도와줍니다. 웹 기반 서버 UI와 Python 기반 클라이언트 도구를 제공하여 복잡한 설정 과정을 단순화했습니다.
+이 프로젝트는 Raspberry Pi 4의 PXE 네트워크 부팅 환경을 쉽게 구성하고 관리할 수 있도록 도와줍니다. Flask 웹 프레임워크 기반의 서버와 Python 클라이언트 도구를 제공하여 복잡한 설정 과정을 단순화했습니다.
 
 ## 주요 기능
 
-### 서버 컴포넌트
+### 서버 컴포넌트 (Python/Flask)
 - 웹 기반 관리 인터페이스
 - 실시간 서비스 상태 모니터링 (DNSMASQ, NFS)
+- 시스템 리소스 모니터링 (CPU, 메모리, 디스크)
 - 클라이언트 상태 확인 (온라인/오프라인)
 - 원클릭 서버 초기 설정
 - SD 카드 자동 감지 및 클라이언트 설정
 - 기존 클라이언트 복제를 통한 새 클라이언트 추가
+- 서비스 로그 뷰어
 
 ### 클라이언트 컴포넌트
 - EEPROM 자동 업데이트 (네트워크 부팅 활성화)
@@ -27,7 +29,7 @@ Raspberry Pi PXE Boot Manager - 편리한 UI/UX로 네트워크 부팅 환경을
 
 ### 서버
 - Ubuntu 22.04 이상
-- Node.js 14 이상
+- Python 3.8 이상
 - 고정 IP 주소 (기본: 192.168.0.10)
 - 유선 이더넷 연결
 
@@ -53,15 +55,14 @@ cp ../setup_client.sh ./
 cp ../create_new_client.sh ./
 cp ../dnsmasq_config.sh ./
 
-# 서버 의존성 설치
-cd server
-npm install
+# Python 의존성 설치
+pip3 install -r requirements.txt
 
 # 서버 실행 (sudo 권한 필요)
-sudo npm start
+sudo python3 rpi_pxe_server.py
 ```
 
-웹 브라우저에서 `http://서버IP:3000` 으로 접속합니다.
+웹 브라우저에서 `http://서버IP:5000` 으로 접속합니다.
 
 ### 3. 클라이언트 설정
 
@@ -103,16 +104,17 @@ sudo ./rpi-pxe-client.py --test          # 네트워크 부팅 테스트
 
 ```
 rpi-pxe-manager/
-├── server/                # 서버 컴포넌트
-│   ├── server.js         # Express 서버
-│   ├── public/           # 웹 UI 파일
-│   │   ├── index.html
-│   │   ├── styles.css
-│   │   └── app.js
-│   └── package.json
+├── rpi_pxe_server.py      # Flask 서버 메인 파일
+├── templates/             # HTML 템플릿
+│   └── index.html        # 웹 UI 메인 페이지
+├── static/               # 정적 파일
+│   ├── css/
+│   │   └── style.css     # 스타일시트
+│   └── js/
+│       └── app.js        # 클라이언트 JavaScript
 ├── client/               # 클라이언트 컴포넌트
 │   └── rpi-pxe-client.py # Python 설정 스크립트
-├── package.json          # 프로젝트 메타데이터
+├── requirements.txt      # Python 의존성
 └── README.md            # 이 파일
 ```
 
@@ -120,8 +122,9 @@ rpi-pxe-manager/
 
 ### 서버가 시작되지 않는 경우
 - sudo 권한으로 실행했는지 확인
-- 3000 포트가 사용 중인지 확인
-- Node.js가 설치되어 있는지 확인
+- 5000 포트가 사용 중인지 확인
+- Python 3.8 이상이 설치되어 있는지 확인
+- 모든 의존성이 설치되었는지 확인 (`pip3 install -r requirements.txt`)
 
 ### 클라이언트가 부팅되지 않는 경우
 - EEPROM이 업데이트되었는지 확인
