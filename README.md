@@ -143,15 +143,34 @@ sudo python3 rpi_pxe_server.py
 **EEPROM 업데이트** (네트워크 부팅 활성화)
 ```bash
 # 라즈베리파이에서 실행
-wget https://raw.githubusercontent.com/minoTrey/rpi-pxe-manager/main/client/rpi-pxe-client.py
-chmod +x rpi-pxe-client.py
-sudo ./rpi-pxe-client.py
-```
+# 1. 현재 EEPROM 설정을 파일로 추출
+sudo rpi-eeprom-config > bootconf.txt
 
-또는 수동으로:
-```bash
-sudo rpi-eeprom-update -d -a  # 최신 EEPROM으로 업데이트
+# 2. 네트워크 부팅 설정 추가
+echo "BOOT_ORDER=0xf21" >> bootconf.txt
+echo "NET_INSTALL_ENABLED=1" >> bootconf.txt
+echo "DHCP_TIMEOUT=45000" >> bootconf.txt
+echo "DHCP_REQ_TIMEOUT=4000" >> bootconf.txt
+
+# 3. 최신 EEPROM 파일 찾기
+LATEST_EEPROM=$(ls -1 /lib/firmware/raspberrypi/bootloader/stable/pieeprom-*.bin | sort -V | tail -1)
+
+# 4. 새 EEPROM 이미지 생성
+sudo rpi-eeprom-config --out netboot-pieeprom.bin --config bootconf.txt $LATEST_EEPROM
+
+# 5. EEPROM 업데이트 적용
+sudo rpi-eeprom-update -d -f ./netboot-pieeprom.bin
+
+# 6. SSH 서비스 활성화
+sudo systemctl enable ssh
+sudo systemctl start ssh
+
+# 7. 재부팅
 sudo reboot
+
+# 8. 재부팅 후 설정 확인
+vcgencmd bootloader_config | grep BOOT_ORDER
+# BOOT_ORDER=0xf21 이 나와야 함
 ```
 
 ## 📱 단계별 사용 가이드
@@ -188,8 +207,15 @@ sudo reboot
 
 1. **새 라즈베리파이**의 EEPROM 업데이트 (한 번만)
    ```bash
-   # 라즈베리파이에서 실행
-   sudo rpi-eeprom-update -d -a
+   # 라즈베리파이에서 실행 (위의 "방법 2" 권장)
+   sudo rpi-eeprom-config > bootconf.txt
+   echo "BOOT_ORDER=0xf21" >> bootconf.txt
+   echo "NET_INSTALL_ENABLED=1" >> bootconf.txt
+   
+   LATEST_EEPROM=$(ls -1 /lib/firmware/raspberrypi/bootloader/stable/pieeprom-*.bin | sort -V | tail -1)
+   sudo rpi-eeprom-config --out netboot-pieeprom.bin --config bootconf.txt $LATEST_EEPROM
+   sudo rpi-eeprom-update -d -f ./netboot-pieeprom.bin
+   sudo systemctl enable ssh && sudo systemctl start ssh
    sudo reboot
    ```
 
