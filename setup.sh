@@ -5,7 +5,6 @@ echo "==============================="
 
 # Python 버전 확인
 PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
-REQUIRED_VERSION="3.8"
 
 if [ -z "$PYTHON_VERSION" ]; then
     echo "❌ Python3가 설치되어 있지 않습니다."
@@ -13,7 +12,15 @@ if [ -z "$PYTHON_VERSION" ]; then
     exit 1
 fi
 
-echo "✓ Python 버전: $PYTHON_VERSION"
+echo "✓ Python 버전: $PYTHON_VERSION (3.8+ 지원, 기본 설치 버전 사용)"
+
+# 버전 체크 (3.8 이상인지 확인)
+PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+
+if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 8 ]); then
+    echo "⚠️  Python 3.8 이상이 권장되지만 계속 진행합니다."
+fi
 
 # pip 확인
 if ! command -v pip3 &> /dev/null; then
@@ -87,8 +94,10 @@ echo ""
 echo "서버를 시작하려면 다음 명령을 실행하세요:"
 if [ -f "venv/bin/activate" ]; then
     echo "  source venv/bin/activate  # 가상환경 활성화"
+    echo "  sudo env PATH=\$PATH python3 rpi_pxe_server.py  # 가상환경용"
+else
+    echo "  sudo python3 rpi_pxe_server.py  # 시스템 전역 설치용"
 fi
-echo "  sudo python3 rpi_pxe_server.py"
 echo ""
 echo "웹 브라우저에서 http://localhost:5000 으로 접속하세요."
 echo ""
