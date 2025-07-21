@@ -1,0 +1,16 @@
+node_modules/
+*.log
+.DS_Store
+.env
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+server/node_modules/
+server/npm-debug.log*
+server/yarn-debug.log*
+server/yarn-error.log*
+client/__pycache__/
+client/*.pyc
+client/.rpi-pxe-client.json
