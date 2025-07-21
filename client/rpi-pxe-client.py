@@ -64,17 +64,42 @@ DISABLE_HDMI=0
             f.write(bootconf_content)
         
         try:
-            # 최신 EEPROM 이미지 찾기
-            result = subprocess.run(['ls', '-1', '/lib/firmware/raspberrypi/bootloader/stable/'],
-                                  capture_output=True, text=True)
-            eeprom_files = [f for f in result.stdout.strip().split('\n') if f.startswith('pieeprom-') and f.endswith('.bin')]
+            # EEPROM 디렉터리 찾기 (버전별 경로 다름)
+            eeprom_dirs = [
+                '/lib/firmware/raspberrypi/bootloader/stable',
+                '/usr/lib/raspberrypi-bootloader'
+            ]
             
-            if not eeprom_files:
+            eeprom_path = None
+            for eeprom_dir in eeprom_dirs:
+                if Path(eeprom_dir).exists():
+                    result = subprocess.run(['ls', '-1', eeprom_dir],
+                                          capture_output=True, text=True)
+                    eeprom_files = [f for f in result.stdout.strip().split('\n') 
+                                  if f.startswith('pieeprom-') and f.endswith('.bin')]
+                    
+                    if eeprom_files:
+                        latest_eeprom = sorted(eeprom_files)[-1]
+                        eeprom_path = f'{eeprom_dir}/{latest_eeprom}'
+                        break
+            
+            if not eeprom_path:
                 print("EEPROM 이미지를 찾을 수 없습니다.")
-                return False
-            
-            latest_eeprom = sorted(eeprom_files)[-1]
-            eeprom_path = f'/lib/firmware/raspberrypi/bootloader/stable/{latest_eeprom}'
+                print("rpi-eeprom 패키지를 설치합니다...")
+                subprocess.run(['sudo', 'apt', 'update'], check=True)
+                subprocess.run(['sudo', 'apt', 'install', 'rpi-eeprom', '-y'], check=True)
+                
+                # 재시도
+                eeprom_dir = '/lib/firmware/raspberrypi/bootloader/stable'
+                result = subprocess.run(['ls', '-1', eeprom_dir],
+                                      capture_output=True, text=True)
+                eeprom_files = [f for f in result.stdout.strip().split('\n') 
+                              if f.startswith('pieeprom-') and f.endswith('.bin')]
+                if eeprom_files:
+                    latest_eeprom = sorted(eeprom_files)[-1]
+                    eeprom_path = f'{eeprom_dir}/{latest_eeprom}'
+                else:
+                    return False
             
             # 새 EEPROM 이미지 생성
             new_eeprom = temp_dir / 'pieeprom-netboot.bin'

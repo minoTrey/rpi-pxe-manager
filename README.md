@@ -140,7 +140,18 @@ sudo python3 rpi_pxe_server.py
 
 #### 3️⃣ 라즈베리파이 준비하기
 
-**EEPROM 업데이트** (네트워크 부팅 활성화)
+**1단계: SD카드에 라즈베리파이 OS 설치**
+1. [Raspberry Pi Imager](https://www.raspberrypi.org/software/) 다운로드 및 설치
+2. SD카드 (16GB 이상) 준비
+3. Raspberry Pi Imager로 **Raspberry Pi OS Legacy (64-bit)** 또는 **Bullseye 기반 버전** 설치
+   - ⚠️ **중요**: Bookworm(최신) 버전은 EEPROM 경로가 다르므로 Legacy/Bullseye 사용 권장
+4. 설정 옵션에서:
+   - **SSH 활성화** ✅
+   - **사용자명/비밀번호** 설정 (예: pi/raspberry)
+   - **WiFi 설정** (필요시)
+5. SD카드를 라즈베리파이에 삽입 후 부팅
+
+**2단계: EEPROM 업데이트** (네트워크 부팅 활성화)
 ```bash
 # 라즈베리파이에서 실행
 # 1. 현재 EEPROM 설정을 파일로 추출
@@ -152,8 +163,17 @@ echo "NET_INSTALL_ENABLED=1" >> bootconf.txt
 echo "DHCP_TIMEOUT=45000" >> bootconf.txt
 echo "DHCP_REQ_TIMEOUT=4000" >> bootconf.txt
 
-# 3. 최신 EEPROM 파일 찾기
-LATEST_EEPROM=$(ls -1 /lib/firmware/raspberrypi/bootloader/stable/pieeprom-*.bin | sort -V | tail -1)
+# 3. 최신 EEPROM 파일 찾기 (경로 확인 후)
+if [ -d "/lib/firmware/raspberrypi/bootloader/stable" ]; then
+    EEPROM_DIR="/lib/firmware/raspberrypi/bootloader/stable"
+elif [ -d "/usr/lib/raspberrypi-bootloader" ]; then
+    EEPROM_DIR="/usr/lib/raspberrypi-bootloader"
+else
+    echo "EEPROM 디렉터리를 찾을 수 없습니다. rpi-eeprom 패키지 설치 확인"
+    sudo apt update && sudo apt install rpi-eeprom -y
+    EEPROM_DIR="/lib/firmware/raspberrypi/bootloader/stable"
+fi
+LATEST_EEPROM=$(ls -1 $EEPROM_DIR/pieeprom-*.bin | sort -V | tail -1)
 
 # 4. 새 EEPROM 이미지 생성
 sudo rpi-eeprom-config --out netboot-pieeprom.bin --config bootconf.txt $LATEST_EEPROM
@@ -191,7 +211,7 @@ vcgencmd bootloader_config | grep BOOT_ORDER
    - DHCP, NFS, TFTP 서버가 자동으로 설정됩니다
    - 완료까지 약 2-3분 소요
 
-4. **라즈베리파이 OS SD 카드**를 서버 컴퓨터에 연결
+4. **설정된 SD카드를 서버 컴퓨터**에 연결 (USB 카드리더 사용)
 
 5. **"첫 클라이언트 설정"** 버튼 클릭
    - 라즈베리파이 시리얼 번호 입력
@@ -205,28 +225,39 @@ vcgencmd bootloader_config | grep BOOT_ORDER
 
 **목표**: 기존 설정을 새 라즈베리파이에 복사
 
-1. **새 라즈베리파이**의 EEPROM 업데이트 (한 번만)
+1. **새 라즈베리파이**에 SD카드로 라즈베리파이 OS 설치 (위의 "1단계" 참조)
+
+2. **EEPROM 업데이트** (한 번만)
    ```bash
-   # 라즈베리파이에서 실행 (위의 "방법 2" 권장)
+   # 라즈베리파이에서 실행 (위의 "2단계" 참조)
    sudo rpi-eeprom-config > bootconf.txt
    echo "BOOT_ORDER=0xf21" >> bootconf.txt
    echo "NET_INSTALL_ENABLED=1" >> bootconf.txt
    
-   LATEST_EEPROM=$(ls -1 /lib/firmware/raspberrypi/bootloader/stable/pieeprom-*.bin | sort -V | tail -1)
+   # EEPROM 파일 경로 확인
+   if [ -d "/lib/firmware/raspberrypi/bootloader/stable" ]; then
+       EEPROM_DIR="/lib/firmware/raspberrypi/bootloader/stable"
+   elif [ -d "/usr/lib/raspberrypi-bootloader" ]; then
+       EEPROM_DIR="/usr/lib/raspberrypi-bootloader"
+   else
+       sudo apt install rpi-eeprom -y
+       EEPROM_DIR="/lib/firmware/raspberrypi/bootloader/stable"
+   fi
+   LATEST_EEPROM=$(ls -1 $EEPROM_DIR/pieeprom-*.bin | sort -V | tail -1)
    sudo rpi-eeprom-config --out netboot-pieeprom.bin --config bootconf.txt $LATEST_EEPROM
    sudo rpi-eeprom-update -d -f ./netboot-pieeprom.bin
    sudo systemctl enable ssh && sudo systemctl start ssh
    sudo reboot
    ```
 
-2. **웹 관리 페이지**에서 "새 클라이언트 추가" 클릭
+3. **웹 관리 페이지**에서 "새 클라이언트 추가" 클릭
 
-3. **설정 정보 입력**
+4. **설정 정보 입력**
    - 복사할 기존 클라이언트 선택
    - 새 라즈베리파이 시리얼 번호 입력
    - (선택) MAC 주소 입력
 
-4. **완료!** 새 라즈베리파이가 자동으로 네트워크 부팅됩니다
+5. **완료!** 새 라즈베리파이가 자동으로 네트워크 부팅됩니다
 
 ## 🔧 고급 설정
 
