@@ -14,3 +14,23 @@ server/yarn-error.log*
 client/__pycache__/
 client/*.pyc
 client/.rpi-pxe-client.json
+
+# Claude-related files
+.claude/
+.archive/
+UPDATE_NOTES.md
+CLEANUP_REPORT.md
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Backup files
+*.backup
+*_backup.py
+*_patch.py
+*_updated.py

@@ -1,335 +1,521 @@
-# 🚀 RPI PXE Manager
+# 🚀 RPI PXE Manager - 라즈베리파이 네트워크 부팅 관리 시스템
 
-**Raspberry Pi PXE Boot Manager** - SD 카드 없이도 네트워크를 통해 여러 대의 라즈베리파이를 부팅하고 관리할 수 있는 Python 기반 웹 관리 도구입니다.
+<div align="center">
 
-![RPI PXE Manager 웹 인터페이스](docs/images/main.png)
-*웹 브라우저에서 모든 라즈베리파이를 한눈에 관리할 수 있습니다*
+![Version](https://img.shields.io/badge/version-2.0-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Python](https://img.shields.io/badge/python-3.8+-yellow.svg)
+![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi-red.svg)
 
-## 📖 이게 뭔가요?
+**라즈베리파이를 SD카드 없이 네트워크로 부팅하고 중앙에서 관리하는 올인원 솔루션**
 
-**PXE (Preboot eXecution Environment)**는 네트워크를 통해 컴퓨터를 부팅하는 기술입니다. 이 프로그램을 사용하면:
+[설치](#-빠른-시작) • [기능](#-주요-기능) • [사용법](#-사용법) • [문제해결](#-문제-해결)
 
-- 🎯 **SD 카드 없이** 라즈베리파이 부팅 가능
-- 🖥️ **웹 브라우저**에서 모든 설정 관리
-- 📡 **한 번의 설정**으로 여러 대 라즈베리파이 관리
-- 🔄 **실시간 모니터링**으로 상태 확인
+</div>
 
-## 🎬 빠른 시작 (5분 만에 시작하기)
+---
 
-### 1단계: 필요한 것들 준비하기
-- **서버 컴퓨터**: Ubuntu 22.04가 설치된 PC/노트북 (고정 IP: 192.168.0.10)
-- **라즈베리파이 4**: 1대 이상
-- **SD 카드**: 라즈베리파이 OS가 설치된 것 (첫 설정용)
-- **유선 랜 케이블**: 모든 장치를 같은 네트워크에 연결
+## 📋 목차
 
-### 2단계: 프로그램 다운로드 및 설치
+- [개요](#-개요)
+- [주요 기능](#-주요-기능)
+- [시스템 요구사항](#-시스템-요구사항)
+- [빠른 시작](#-빠른-시작)
+- [사용법](#-사용법)
+  - [메인 메뉴](#메인-메뉴)
+  - [초기 설정 마법사](#1-초기-설정-마법사)
+  - [클라이언트 관리](#2-클라이언트-관리)
+  - [서버 설정](#3-서버-설정)
+  - [서비스 관리](#4-서비스-관리)
+- [네트워크 구성](#-네트워크-구성)
+- [문제 해결](#-문제-해결)
+- [고급 설정](#-고급-설정)
+
+---
+
+## 🎯 개요
+
+RPI PXE Manager는 여러 대의 라즈베리파이를 SD카드 없이 네트워크 부팅으로 운영할 수 있게 해주는 통합 관리 시스템입니다. 한 대의 서버에서 모든 라즈베리파이의 OS와 파일을 중앙 관리할 수 있어, 대규모 라즈베리파이 클러스터 운영에 최적화되어 있습니다.
+
+### 왜 네트워크 부팅인가?
+
+- **📦 중앙 관리**: 모든 라즈베리파이를 한 곳에서 관리
+- **💾 SD카드 불필요**: SD카드 고장 걱정 없음
+- **🔄 쉬운 업데이트**: 서버에서 한 번만 업데이트하면 모든 클라이언트에 적용
+- **🚀 빠른 배포**: 새 라즈베리파이 추가 시 즉시 부팅 가능
+- **💰 비용 절감**: SD카드 구매 비용 절약
+
+---
+
+## ✨ 주요 기능
+
+### 🎮 올인원 관리 시스템
+- **터미널 기반 GUI**: 직관적인 메뉴 시스템
+- **원클릭 설정**: 복잡한 설정을 자동으로 처리
+- **실시간 모니터링**: 시스템 상태 실시간 확인
+
+### 🖥️ 클라이언트 관리
+- **자동 IP 할당**: 순차적 IP 자동 배정 (192.168.0.100부터)
+- **MAC 주소 자동완성**: 라즈베리파이 MAC 주소 빠른 입력
+- **시리얼 번호 기반 관리**: 각 라즈베리파이를 시리얼 번호로 식별
+- **템플릿 복사**: 기존 클라이언트에서 새 클라이언트로 시스템 복사
+
+### 🌐 네트워크 기능
+- **DHCP/PXE 통합**: dnsmasq를 이용한 통합 서비스
+- **NFS 루트 파일시스템**: 네트워크 파일시스템 자동 구성
+- **TFTP 부트 서버**: 부트 파일 자동 관리
+- **IP 충돌 방지**: 공유기와 충돌 없는 안전한 설정
+
+### 🛠️ 자동화 기능
+- **서비스 자동 시작**: 필요한 서비스 자동 관리
+- **설정 파일 자동 생성**: 복잡한 설정 파일 자동 작성
+- **에러 자동 복구**: 일반적인 문제 자동 해결
+
+---
+
+## 💻 시스템 요구사항
+
+### 서버 (PXE 서버)
+- **OS**: Ubuntu 20.04+ 또는 Debian 10+
+- **RAM**: 최소 2GB (권장 4GB+)
+- **저장공간**: 클라이언트당 8GB + 여유 공간
+- **네트워크**: 유선 이더넷 연결 필수
+- **권한**: sudo 권한 필요
+
+### 클라이언트 (라즈베리파이)
+- **모델**: Raspberry Pi 3B+, 4B, 5 (PXE 부팅 지원 모델)
+- **부팅 설정**: EEPROM에서 네트워크 부팅 활성화
+- **네트워크**: 유선 이더넷 연결 필수
+
+### 필수 패키지 (자동 설치됨)
 ```bash
-# 프로그램 다운로드
-git clone https://github.com/minoTrey/rpi-pxe-manager.git
+dnsmasq          # DHCP/PXE/TFTP 서버
+nfs-kernel-server # NFS 파일 공유
+python3-pip      # Python 패키지 관리
+psutil           # 시스템 모니터링
+netifaces        # 네트워크 인터페이스 관리
+```
+
+---
+
+## 🚀 빠른 시작
+
+### 1️⃣ 다운로드 및 실행
+
+```bash
+# 저장소 클론
+git clone https://github.com/yourusername/rpi-pxe-manager.git
 cd rpi-pxe-manager
 
-# 자동 설치 (모든 의존성 자동 설치)
-./setup.sh
+# 실행 권한 부여
+chmod +x pxe
+
+# 프로그램 실행 (자동으로 sudo 권한 요청)
+./pxe
 ```
 
-### 3단계: 서버 시작
+### 2️⃣ 초기 설정 마법사 실행
+
+프로그램 실행 후 메뉴에서 `6. 초기 설정 마법사` 선택
+
+```
+🚀 원클릭 PXE 부팅 설정 마법사
+모든 설정을 자동으로 구성합니다!
+
+자동 설정을 시작하시겠습니까? (Y/n): Y
+```
+
+### 3️⃣ 첫 번째 클라이언트 추가
+
 ```bash
-sudo python3 rpi_pxe_server.py
+# 메인 메뉴에서 2 → 1 선택
+2. 클라이언트 관리
+  1. 새 클라이언트 추가
+
+시리얼 번호: eb2a1f17
+MAC 주소: e30f  # 마지막 4자리만 입력!
+고정 IP 주소 [192.168.0.100]: [Enter]  # 자동 할당
 ```
 
-### 4단계: 웹 관리 페이지 접속
-웹 브라우저에서 `http://192.168.0.10:5000` 접속
+---
 
-### 5단계: 한 번의 클릭으로 완료!
-1. **"서버 초기 설정"** 버튼 클릭
-2. **"첫 클라이언트 설정"** 버튼 클릭해서 SD 카드 내용 복사
-3. 라즈베리파이에서 SD 카드 제거 → 전원 재시작
-4. 🎉 **완료!** 네트워크 부팅 성공!
+## 📖 사용법
 
-## 🌟 주요 기능
+### 메인 메뉴
 
-### 🖥️ 웹 관리 인터페이스
-- **직관적인 대시보드**: 모든 라즈베리파이 상태를 한눈에 확인
-- **실시간 모니터링**: CPU, 메모리, 디스크 사용량 실시간 표시
-- **서비스 상태 확인**: DHCP, NFS 서버 상태 모니터링
-- **로그 뷰어**: 시스템 로그를 웹에서 바로 확인
+```
+========================================================
+       RPI PXE Manager - 터미널 관리 시스템
+========================================================
 
-### ⚡ 원클릭 설정
-- **서버 초기화**: 복잡한 네트워크 설정을 한 번의 클릭으로
-- **클라이언트 추가**: SD 카드를 꽂고 버튼 하나로 설정 완료
-- **자동 복제**: 기존 라즈베리파이 설정을 새 장치에 복사
+메인 메뉴:
+  1. 📊 시스템 상태 확인
+  2. 🖥️  클라이언트 관리
+  3. ⚙️  서버 설정
+  4. 🚀 서비스 관리
+  5. 📝 로그 확인
+  6. 🔧 초기 설정 마법사
+  0. 🚪 종료
+```
 
-### 🔧 라즈베리파이 관리 도구
-- **EEPROM 업데이트**: 네트워크 부팅을 위한 펌웨어 자동 설정
-- **SSH 활성화**: 원격 접속을 위한 자동 설정
-- **상태 모니터링**: 각 라즈베리파이의 온라인/오프라인 상태 실시간 확인
+### 1. 초기 설정 마법사
 
-## 💻 상세 사용법
+처음 시작할 때 반드시 실행해야 합니다:
 
-### 📋 시스템 요구사항
+```bash
+# 메인 메뉴에서 6번 선택
+6. 🔧 초기 설정 마법사
 
-| 항목 | 서버 | 라즈베리파이 |
-|------|------|-------------|
-| **OS** | Ubuntu 22.04 이상 | Raspberry Pi OS |
-| **Python** | 3.8+ (기본 설치된 버전 사용) | 3.8+ (기본 설치된 버전 사용) |
-| **네트워크** | 고정 IP (192.168.0.10) | DHCP 또는 고정 IP |
-| **연결** | 유선 이더넷 필수 | 유선 이더넷 필수 |
+# 자동 설정 진행
+✓ 네트워크 인터페이스 자동 감지
+✓ 서버 IP 고정 (192.168.0.10)
+✓ Netplan 설정 (고정 IP)
+✓ dnsmasq 통합 설정 생성
+✓ NFS/TFTP 디렉토리 생성
+✓ 서비스 자동 시작
+```
 
-### 🔧 자세한 설치 과정
+**중요**: 초기 설정 후 네트워크가 재시작됩니다. SSH 연결이 끊길 수 있습니다.
 
-#### 1️⃣ 서버 컴퓨터 설정
+### 2. 클라이언트 관리
 
-**네트워크 설정** (중요!)
+#### 새 클라이언트 추가
+
+```bash
+# 메인 메뉴 → 2 → 1
+2. 🖥️ 클라이언트 관리
+  1. 새 클라이언트 추가
+
+# 입력 예시
+시리얼 번호: eb2a1f17         # 8자리 16진수
+MAC 주소: e3:0f               # 마지막 4자리만 입력!
+고정 IP 주소 [192.168.0.100]: # Enter로 자동 할당
+```
+
+#### MAC 주소 빠른 입력
+```
+모든 라즈베리파이 MAC: 88:a2:9e:1b:XX:XX
+마지막 4자리만 입력하면 자동 완성!
+
+예시: 
+- e30f → 88:a2:9e:1b:e3:0f
+- e4:2b → 88:a2:9e:1b:e4:2b
+```
+
+#### IP 할당 규칙
+```
+고정 IP 범위: 192.168.0.100-199 (100개)
+동적 DHCP 범위: 192.168.0.200-250
+
+- 192.168.0.100: 첫 번째 클라이언트
+- 192.168.0.101: 두 번째 클라이언트
+- ... 순차적 자동 할당
+```
+
+#### SD카드에서 시스템 복사
+
+기존 Raspberry Pi OS SD카드에서 시스템을 복사:
+
+```bash
+# 메인 메뉴 → 2 → 5
+5. SD 카드에서 시스템 복사
+
+# SD카드 삽입 후
+사용 가능한 장치:
+  1. /dev/sda (32GB SD Card)
+  
+대상 클라이언트: eb2a1f17
+복사 시작 (약 10-20분 소요)
+```
+
+### 3. 서버 설정 변경
+
+#### 네트워크 설정
+```bash
+# 메인 메뉴 → 3 → 1
+1. 네트워크 인터페이스 변경
+
+현재: enp0s31f6
+사용 가능한 인터페이스:
+  1. enp0s31f6 (192.168.0.10)
+  2. wlan0 (not recommended)
+```
+
+#### dnsmasq 설정 재생성
+```bash
+# 메인 메뉴 → 3 → 4
+4. DHCP/PXE 설정 재생성
+
+✓ /etc/dnsmasq.conf 통합 설정 생성
+✓ 고정 IP 범위: 100-199
+✓ DHCP 동적 범위: 200-250
+✓ dnsmasq 서비스 재시작
+```
+
+### 4. 서비스 관리
+
+서비스 상태 확인 및 재시작:
+
+```bash
+# 메인 메뉴 → 4
+서비스 관리:
+  1. 모든 서비스 시작
+  2. 모든 서비스 중지
+  3. 서비스 재시작
+  4. 서비스 상태 확인
+
+현재 상태:
+✅ dnsmasq (DHCP/TFTP)
+✅ nfs-kernel-server (NFS)
+✅ rpcbind (RPC)
+```
+
+### 5. 문제 진단
+
+#### 로그 확인
+```bash
+# 메인 메뉴 → 5
+로그 확인:
+  1. dnsmasq 로그 (DHCP/TFTP)
+  2. NFS 로그
+  3. 시스템 로그
+  4. 부팅 로그 (특정 클라이언트)
+```
+
+#### 실시간 모니터링
+```bash
+# dnsmasq 실시간 로그
+sudo journalctl -u dnsmasq -f
+
+# 네트워크 부팅 과정 확인
+# SI_ADDR: 192.168.0.10 (정상)
+# IP 할당: 192.168.0.100
+# TFTP 파일 전송 상태
+```
+
+---
+
+## 🔧 문제 해결
+
+### ❌ 일반적인 문제와 해결법
+
+#### 1. "SI_ADDR에 192.168.0.1이 표시됨"
+
+**원인:** dnsmasq 설정이 잘못됨
+
+**해결:**
+```bash
+# dnsmasq 재시작
+sudo systemctl restart dnsmasq
+
+# 설정 확인
+cat /etc/dnsmasq.d/pxe-main.conf
+```
+
+#### 2. "Emergency mode로 부팅됨"
+
+**원인:** fstab 설정 문제
+
+**해결:**
+```bash
+# 클라이언트 fstab 확인
+sudo nano /media/rpi-client/{serial}/etc/fstab
+
+# 최소 설정으로 변경
+proc /proc proc defaults 0 0
+```
+
+#### 3. "DHCP IP를 받지 못함"
+
+**원인:** 네트워크 인터페이스 설정 오류
+
+**해결:**
 ```bash
 # 네트워크 인터페이스 확인
-ip addr
+ip link show
 
-# 고정 IP 설정 (예: eth0 인터페이스)
-sudo nano /etc/netplan/01-netcfg.yaml
+# pxe 프로그램에서 인터페이스 재설정
+3. 서버 설정 → 1. 네트워크 인터페이스 변경
 ```
 
-netplan 설정 예시:
-```yaml
-network:
-  version: 2
-  ethernets:
-    eth0:  # 실제 인터페이스 이름으로 변경
-      addresses:
-        - 192.168.0.10/24
-      gateway4: 192.168.0.1
-      nameservers:
-        addresses: [8.8.8.8, 8.8.4.4]
-```
+### 📋 진단 명령어
 
 ```bash
-# 네트워크 설정 적용
-sudo netplan apply
+# dnsmasq 로그 확인
+sudo tail -f /var/log/dnsmasq.log
 
-# 프로그램 설치
-git clone https://github.com/minoTrey/rpi-pxe-manager.git
-cd rpi-pxe-manager
-./setup.sh
+# NFS 공유 확인
+showmount -e localhost
+
+# TFTP 파일 확인
+ls -la /tftpboot/
+
+# 포트 사용 확인
+sudo netstat -tulpn | grep -E '(67|69|111|2049)'
 ```
 
-#### 2️⃣ 웹 관리 인터페이스 사용법
+---
 
-**서버 시작**
-```bash
-# 가상환경을 사용한 경우
-sudo env PATH=$PATH python3 rpi_pxe_server.py
+## ⚙️ 고급 설정
 
-# 시스템 전역 설치한 경우
-sudo python3 rpi_pxe_server.py
+### 사용자 정의 설정 파일
+
+설정 파일 위치: `~/.rpi_pxe_config.json`
+
+```json
+{
+  "server_ip": "192.168.0.10",
+  "network_interface": "enp0s31f6",
+  "nfs_root": "/media/rpi-client",
+  "tftp_root": "/tftpboot",
+  "clients": [
+    {
+      "serial": "eb2a1f17",
+      "hostname": "eb2a1f17",
+      "mac": "88:a2:9e:1b:e3:0f",
+      "ip": "192.168.0.100"
+    }
+  ]
+}
 ```
 
-> 💡 **sudo가 필요한 이유**: 
-> - 시스템 서비스(DHCP, NFS) 상태 확인
-> - 설정 스크립트 실행 (네트워크 설정 변경)
-> - 시스템 로그 읽기
-> 
-> ⚠️ **가상환경 사용시 주의**: `sudo`는 시스템 Python을 사용하므로 `sudo env PATH=$PATH python3`로 실행
+### dnsmasq 설정 파일
 
-**웹 브라우저 접속**
-- URL: `http://192.168.0.10:5000`
-- 모든 설정을 웹에서 진행할 수 있습니다
+**메인 설정**: `/etc/dnsmasq.d/pxe-main.conf`
+```conf
+interface=enp0s31f6
+bind-interfaces
 
-**주요 버튼 설명**
-- 🔧 **"서버 초기 설정"**: DHCP, NFS, TFTP 서버 자동 구성
-- ➕ **"첫 클라이언트 설정"**: SD 카드에서 파일시스템 복사
-- 📋 **"새 클라이언트 추가"**: 기존 설정을 새 라즈베리파이에 복제
+# DHCP 범위 설정
+# DHCP 서버 활성화 (고정 IP만 할당, 동적 범위 없음)
+# 각 클라이언트는 client-*.conf 파일에서 개별 설정
 
-#### 3️⃣ 라즈베리파이 준비하기
+# 게이트웨이 설정
+dhcp-option=3,192.168.0.1
 
-**1단계: SD카드에 라즈베리파이 OS 설치**
-1. [Raspberry Pi Imager](https://www.raspberrypi.org/software/) 다운로드 및 설치
-2. SD카드 (16GB 이상) 준비
-3. Raspberry Pi Imager로 **Raspberry Pi OS Legacy (64-bit)** 또는 **Bullseye 기반 버전** 설치
-   - ⚠️ **중요**: Bookworm(최신) 버전은 EEPROM 경로가 다르므로 Legacy/Bullseye 사용 권장
-4. 설정 옵션에서:
-   - **SSH 활성화** ✅
-   - **사용자명/비밀번호** 설정 (예: pi/raspberry)
-   - **WiFi 설정** (필요시)
-5. SD카드를 라즈베리파이에 삽입 후 부팅
+# DNS 서버 설정
+dhcp-option=6,8.8.8.8,8.8.4.4
 
-**2단계: EEPROM 업데이트** (네트워크 부팅 활성화)
-```bash
-# 라즈베리파이에서 실행
-# 1. 현재 EEPROM 설정을 파일로 추출
-sudo rpi-eeprom-config > bootconf.txt
+# PXE 부팅 기본 설정
+dhcp-boot=bootcode.bin
 
-# 2. 네트워크 부팅 설정 추가
-echo "BOOT_ORDER=0xf21" >> bootconf.txt
-echo "NET_INSTALL_ENABLED=1" >> bootconf.txt
-echo "DHCP_TIMEOUT=45000" >> bootconf.txt
-echo "DHCP_REQ_TIMEOUT=4000" >> bootconf.txt
-
-# 3. 최신 EEPROM 파일 찾기 (경로 확인 후)
-if [ -d "/lib/firmware/raspberrypi/bootloader/stable" ]; then
-    EEPROM_DIR="/lib/firmware/raspberrypi/bootloader/stable"
-elif [ -d "/usr/lib/raspberrypi-bootloader" ]; then
-    EEPROM_DIR="/usr/lib/raspberrypi-bootloader"
-else
-    echo "EEPROM 디렉터리를 찾을 수 없습니다. rpi-eeprom 패키지 설치 확인"
-    sudo apt update && sudo apt install rpi-eeprom -y
-    EEPROM_DIR="/lib/firmware/raspberrypi/bootloader/stable"
-fi
-LATEST_EEPROM=$(ls -1 $EEPROM_DIR/pieeprom-*.bin | sort -V | tail -1)
-
-# 4. 새 EEPROM 이미지 생성
-sudo rpi-eeprom-config --out netboot-pieeprom.bin --config bootconf.txt $LATEST_EEPROM
-
-# 5. EEPROM 업데이트 적용
-sudo rpi-eeprom-update -d -f ./netboot-pieeprom.bin
-
-# 6. SSH 서비스 활성화
-sudo systemctl enable ssh
-sudo systemctl start ssh
-
-# 7. 재부팅
-sudo reboot
-
-# 8. 재부팅 후 설정 확인
-vcgencmd bootloader_config | grep BOOT_ORDER
-# BOOT_ORDER=0xf21 이 나와야 함
+# TFTP 서버 활성화
+enable-tftp
+tftp-root=/tftpboot
 ```
 
-## 📱 단계별 사용 가이드
+**클라이언트별 설정**: `/etc/dnsmasq.d/client-{serial}.conf`
+```conf
+# Fixed IP for eb2a1f17
+dhcp-host=88:a2:9e:1b:e3:0f,192.168.0.100,eb2a1f17,12h
 
-### 🎯 시나리오 1: 처음 설정하는 경우
-
-**목표**: 한 대의 라즈베리파이를 네트워크 부팅으로 설정
-
-1. **서버 컴퓨터에서** 프로그램 실행
-   ```bash
-   cd rpi-pxe-manager
-   sudo python3 rpi_pxe_server.py
-   ```
-
-2. **웹 브라우저**에서 `http://192.168.0.10:5000` 접속
-
-3. **"서버 초기 설정"** 버튼 클릭
-   - DHCP, NFS, TFTP 서버가 자동으로 설정됩니다
-   - 완료까지 약 2-3분 소요
-
-4. **설정된 SD카드를 서버 컴퓨터**에 연결 (USB 카드리더 사용)
-
-5. **"첫 클라이언트 설정"** 버튼 클릭
-   - 라즈베리파이 시리얼 번호 입력
-   - SD 카드 선택 후 설정 시작
-   - 파일시스템 복사 완료까지 약 5-10분 소요
-
-6. **라즈베리파이**에서 SD 카드 제거 후 재부팅
-   - 자동으로 네트워크 부팅됩니다!
-
-### 🔄 시나리오 2: 추가 라즈베리파이 연결하는 경우
-
-**목표**: 기존 설정을 새 라즈베리파이에 복사
-
-1. **새 라즈베리파이**에 SD카드로 라즈베리파이 OS 설치 (위의 "1단계" 참조)
-
-2. **EEPROM 업데이트** (한 번만)
-   ```bash
-   # 라즈베리파이에서 실행 (위의 "2단계" 참조)
-   sudo rpi-eeprom-config > bootconf.txt
-   echo "BOOT_ORDER=0xf21" >> bootconf.txt
-   echo "NET_INSTALL_ENABLED=1" >> bootconf.txt
-   
-   # EEPROM 파일 경로 확인
-   if [ -d "/lib/firmware/raspberrypi/bootloader/stable" ]; then
-       EEPROM_DIR="/lib/firmware/raspberrypi/bootloader/stable"
-   elif [ -d "/usr/lib/raspberrypi-bootloader" ]; then
-       EEPROM_DIR="/usr/lib/raspberrypi-bootloader"
-   else
-       sudo apt install rpi-eeprom -y
-       EEPROM_DIR="/lib/firmware/raspberrypi/bootloader/stable"
-   fi
-   LATEST_EEPROM=$(ls -1 $EEPROM_DIR/pieeprom-*.bin | sort -V | tail -1)
-   sudo rpi-eeprom-config --out netboot-pieeprom.bin --config bootconf.txt $LATEST_EEPROM
-   sudo rpi-eeprom-update -d -f ./netboot-pieeprom.bin
-   sudo systemctl enable ssh && sudo systemctl start ssh
-   sudo reboot
-   ```
-
-3. **웹 관리 페이지**에서 "새 클라이언트 추가" 클릭
-
-4. **설정 정보 입력**
-   - 복사할 기존 클라이언트 선택
-   - 새 라즈베리파이 시리얼 번호 입력
-   - (선택) MAC 주소 입력
-
-5. **완료!** 새 라즈베리파이가 자동으로 네트워크 부팅됩니다
-
-## 🔧 고급 설정
-
-### 🌐 네트워크 설정 변경
-웹 관리 페이지에서 "설정 변경" 버튼을 클릭하여 다음을 수정할 수 있습니다:
-- 서버 IP 주소
-- DHCP 범위
-- 네트워크 인터페이스
-
-### 📊 모니터링 기능
-- **실시간 상태**: 각 라즈베리파이의 온라인/오프라인 상태
-- **시스템 리소스**: 서버의 CPU, 메모리, 디스크 사용량
-- **서비스 로그**: DHCP, NFS 서버 로그 실시간 확인
-
-## ❓ 문제 해결
-
-### 🚨 자주 발생하는 문제들
-
-**Q: 서버가 시작되지 않아요!**
-```bash
-# 다음 순서로 확인해보세요
-sudo netstat -tulpn | grep :5000  # 포트 충돌 확인
-python3 --version                 # Python 버전 확인 (3.8+ 필요, 기본 설치 버전도 OK)
-pip3 install -r requirements.txt  # 의존성 재설치
-sudo python3 rpi_pxe_server.py    # sudo 권한으로 실행
+# PXE boot path for this client
+dhcp-boot=tag:88:a2:9e:1b:e3:0f,eb2a1f17/bootcode.bin
 ```
 
-**Q: 라즈베리파이가 네트워크 부팅하지 않아요!**
-```bash
-# 라즈베리파이에서 확인
-vcgencmd bootloader_config         # EEPROM 설정 확인
-sudo rpi-eeprom-update -d -a      # EEPROM 업데이트
+### NFS 공유 설정
+
+`/etc/exports` 파일:
+```
+/media/rpi-client/eb2a1f17 *(rw,sync,no_subtree_check,no_root_squash)
 ```
 
-**Q: 웹 페이지가 접속되지 않아요!**
-- 방화벽 확인: `sudo ufw status`
-- 네트워크 연결 확인: `ping 192.168.0.10`
-- 서버 로그 확인: 콘솔에서 오류 메시지 확인
+### 부트 설정 파일
 
-### 📋 로그 확인 방법
-```bash
-# 시스템 서비스 로그
-sudo journalctl -u dnsmasq -f      # DHCP 로그
-sudo journalctl -u nfs-kernel-server -f  # NFS 로그
-
-# 네트워크 상태 확인
-sudo systemctl status dnsmasq
-sudo systemctl status nfs-kernel-server
+`/tftpboot/{serial}/cmdline.txt`:
+```
+console=serial0,115200 console=tty1 root=/dev/nfs 
+nfsroot=192.168.0.10:/media/rpi-client/{serial},vers=4.1,proto=tcp 
+rw ip=dhcp rootwait
 ```
 
-## 📁 프로젝트 구조
+---
+
+## 🌐 네트워크 구성
+
+### 기본 네트워크 구조
+
 ```
-rpi-pxe-manager/
-├── 🖥️ rpi_pxe_server.py      # Flask 웹 서버 (메인)
-├── 🎬 demo_server.py         # 데모용 서버 (스크린샷용)
-├── 📁 templates/             # 웹 페이지 템플릿
-├── 📁 static/               # CSS, JavaScript 파일
-├── 📁 client/               # 라즈베리파이용 설정 도구
-├── 📁 docs/images/          # 문서용 이미지 파일
-├── ⚙️ setup.sh              # 자동 설치 스크립트
-├── 📋 requirements.txt      # Python 패키지 목록
-└── 📖 README.md            # 이 문서
+인터넷
+  │
+  ├── 공유기 (192.168.0.1)
+  │     │
+  │     ├── PXE 서버 (192.168.0.10)
+  │     │
+  │     ├── RPi 클라이언트 #1 (192.168.0.100)
+  │     ├── RPi 클라이언트 #2 (192.168.0.101)
+  │     ├── RPi 클라이언트 #3 (192.168.0.102)
+  │     └── ... 
 ```
+
+### IP 할당 규칙
+
+| 장치 | IP 범위 | 설명 |
+|------|---------|------|
+| 공유기 | 192.168.0.1 | 기본 게이트웨이 |
+| PXE 서버 | 192.168.0.10 | 고정 IP |
+| RPi 클라이언트 | 192.168.0.100-199 | 고정 IP만 할당 |
+| 기타 장치 | 공유기 DHCP 사용 | 공유기에서 관리 |
+
+### 포트 사용
+
+| 포트 | 프로토콜 | 서비스 | 설명 |
+|------|----------|--------|------|
+| 67 | UDP | DHCP | IP 주소 할당 |
+| 69 | UDP | TFTP | 부트 파일 전송 |
+| 111 | TCP/UDP | RPC | NFS 지원 |
+| 2049 | TCP/UDP | NFS | 루트 파일시스템 |
+| 4011 | UDP | PXE | PXE 부팅 |
+
+---
+
+## 🚨 주의사항
+
+### ⚠️ 중요 안전 수칙
+
+1. **백업 필수**: 시스템 변경 전 항상 백업
+2. **네트워크 격리**: 가능하면 별도 네트워크 구성
+3. **보안 설정**: NFS 접근 제한 설정 권장
+4. **전원 관리**: UPS 사용 권장 (전원 차단 시 파일시스템 손상 가능)
+
+### 🔒 보안 권장사항
+
+- NFS를 특정 IP 범위로만 제한
+- 방화벽 규칙 설정
+- 정기적인 시스템 업데이트
+- 불필요한 서비스 비활성화
+
+---
+
+## 📚 추가 자료
+
+### 유용한 링크
+- [라즈베리파이 공식 PXE 부팅 가이드](https://www.raspberrypi.org/documentation/hardware/raspberrypi/bootmodes/net.md)
+- [dnsmasq 매뉴얼](http://www.thekelleys.org.uk/dnsmasq/docs/dnsmasq-man.html)
+- [NFS 설정 가이드](https://ubuntu.com/server/docs/service-nfs)
+
+### 관련 프로젝트
+- [PiServer](https://github.com/raspberrypi/piserver) - 라즈베리파이 공식 솔루션
+- [LTSP](https://ltsp.org/) - Linux Terminal Server Project
+
+---
 
 ## 🤝 기여하기
-- 🐛 **버그 신고**: [Issues](https://github.com/minoTrey/rpi-pxe-manager/issues)
-- 💡 **기능 제안**: [Issues](https://github.com/minoTrey/rpi-pxe-manager/issues)
-- 🔧 **코드 기여**: Pull Request 환영!
 
-## 📜 라이센스
-MIT License - 자유롭게 사용하고 수정할 수 있습니다.
+버그 리포트, 기능 제안, 풀 리퀘스트를 환영합니다!
 
-## 🙏 크레딧
-이 프로젝트는 복잡한 PXE 부팅 설정을 쉽게 만들기 위해 제작되었습니다. 
-기존 PXE 설정 스크립트들을 참고하여 웹 기반 관리 인터페이스를 구현했습니다.
+---
+
+## 📄 라이센스
+
+이 프로젝트는 MIT 라이센스 하에 배포됩니다.
+
+---
+
+<div align="center">
+
+**⭐ 이 프로젝트가 도움이 되었다면 Star를 눌러주세요!**
+
+Made with ❤️ for Raspberry Pi Community
+
+</div>

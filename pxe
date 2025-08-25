@@ -1,0 +1,2090 @@
+#!/usr/bin/env python3
+"""
+RPI PXE Manager - 올인원 실행 파일
+설치부터 실행까지 한 번에!
+"""
+
+import os
+import sys
+import subprocess
+import json
+import time
+import threading
+import re
+from pathlib import Path
+from datetime import datetime
+
+# 필요한 패키지 자동 설치
+def install_packages():
+    required = ['psutil', 'netifaces']
+    missing = []
+    
+    for pkg in required:
+        try:
+            __import__(pkg)
+        except ImportError:
+            missing.append(pkg)
+    
+    if missing:
+        print(f"📦 필요한 패키지 설치 중: {', '.join(missing)}")
+        cmd = [sys.executable, '-m', 'pip', 'install', '--user', '--break-system-packages'] + missing
+        subprocess.run(cmd, stderr=subprocess.DEVNULL)
+        print("✅ 패키지 설치 완료!")
+
+install_packages()
+
+import psutil
+import netifaces
+from typing import Dict, List, Optional, Tuple
+
+# ANSI 색상 코드
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    CLEAR = '\033[2J\033[H'
+
+class RPIPXEManager:
+    def __init__(self):
+        self.config_file = Path.home() / '.rpi_pxe_config.json'
+        self.config = self.load_config()
+        self.running = True
+        
+    def load_config(self) -> dict:
+        """설정 파일 로드"""
+        if self.config_file.exists():
+            with open(self.config_file, 'r') as f:
+                return json.load(f)
+        return {
+            'server_ip': '192.168.0.10',
+            'dhcp_range_start': '192.168.0.100',
+            'dhcp_range_end': '192.168.0.200',
+            'network_interface': 'eth0',
+            'nfs_root': '/media/rpi-client',
+            'tftp_root': '/tftpboot',
+            'clients': []
+        }
+    
+    def save_config(self):
+        """설정 파일 저장"""
+        with open(self.config_file, 'w') as f:
+            json.dump(self.config, f, indent=2)
+    
+    def clear_screen(self):
+        """화면 지우기"""
+        print(Colors.CLEAR, end='')
+    
+    def print_header(self):
+        """헤더 출력"""
+        self.clear_screen()
+        print(f"{Colors.BOLD}{Colors.CYAN}{'='*60}{Colors.ENDC}")
+        print(f"{Colors.BOLD}{Colors.GREEN}       RPI PXE Manager - 터미널 관리 시스템{Colors.ENDC}")
+        print(f"{Colors.BOLD}{Colors.CYAN}{'='*60}{Colors.ENDC}")
+        print()
+    
+    def print_menu(self):
+        """메인 메뉴 출력"""
+        print(f"{Colors.BOLD}메인 메뉴:{Colors.ENDC}")
+        print(f"  {Colors.CYAN}1.{Colors.ENDC} 📊 시스템 상태 확인")
+        print(f"  {Colors.CYAN}2.{Colors.ENDC} 🖥️  클라이언트 관리")
+        print(f"  {Colors.CYAN}3.{Colors.ENDC} ⚙️  서버 설정")
+        print(f"  {Colors.CYAN}4.{Colors.ENDC} 🚀 서비스 관리")
+        print(f"  {Colors.CYAN}5.{Colors.ENDC} 📝 로그 확인")
+        print(f"  {Colors.CYAN}6.{Colors.ENDC} 🔧 초기 설정 마법사")
+        print(f"  {Colors.CYAN}0.{Colors.ENDC} 🚪 종료")
+        print()
+    
+    def get_system_status(self) -> Dict:
+        """시스템 상태 정보 수집"""
+        status = {
+            'cpu': psutil.cpu_percent(interval=1),
+            'memory': psutil.virtual_memory().percent,
+            'disk': psutil.disk_usage('/').percent,
+            'network': {},
+            'services': {}
+        }
+        
+        # 네트워크 인터페이스 정보
+        try:
+            iface = self.config['network_interface']
+            addrs = netifaces.ifaddresses(iface)
+            if netifaces.AF_INET in addrs:
+                status['network']['ip'] = addrs[netifaces.AF_INET][0]['addr']
+                status['network']['netmask'] = addrs[netifaces.AF_INET][0]['netmask']
+        except:
+            status['network']['ip'] = 'N/A'
+            status['network']['netmask'] = 'N/A'
+        
+        # 서비스 상태 확인
+        services = ['dnsmasq', 'nfs-kernel-server', 'tftpd-hpa']
+        for service in services:
+            result = subprocess.run(['systemctl', 'is-active', service], 
+                                  capture_output=True, text=True)
+            status['services'][service] = result.stdout.strip() == 'active'
+        
+        return status
+    
+    def show_system_status(self):
+        """시스템 상태 표시"""
+        self.print_header()
+        print(f"{Colors.BOLD}시스템 상태{Colors.ENDC}\n")
+        
+        status = self.get_system_status()
+        
+        # 리소스 사용률
+        print(f"{Colors.BOLD}리소스 사용률:{Colors.ENDC}")
+        self.print_progress_bar("CPU", status['cpu'])
+        self.print_progress_bar("메모리", status['memory'])
+        self.print_progress_bar("디스크", status['disk'])
+        print()
+        
+        # 네트워크 정보
+        print(f"{Colors.BOLD}네트워크 설정:{Colors.ENDC}")
+        print(f"  인터페이스: {self.config['network_interface']}")
+        print(f"  IP 주소: {status['network'].get('ip', 'N/A')}")
+        print(f"  넷마스크: {status['network'].get('netmask', 'N/A')}")
+        print()
+        
+        # 서비스 상태
+        print(f"{Colors.BOLD}서비스 상태:{Colors.ENDC}")
+        for service, active in status['services'].items():
+            icon = "✅" if active else "❌"
+            color = Colors.GREEN if active else Colors.FAIL
+            print(f"  {icon} {color}{service:<20}{Colors.ENDC} {'실행 중' if active else '중지됨'}")
+        
+        print()
+        input(f"{Colors.CYAN}Enter를 눌러 계속...{Colors.ENDC}")
+    
+    def ip_to_number(self, ip_str):
+        """IP 주소를 숫자로 변환하여 정렬"""
+        if ip_str == 'N/A' or not ip_str or ip_str == '없음':
+            return 999999999
+        try:
+            parts = ip_str.split('.')
+            return int(parts[0]) * 256**3 + int(parts[1]) * 256**2 + int(parts[2]) * 256 + int(parts[3])
+        except:
+            return 999999999
+    
+    def print_progress_bar(self, label: str, percent: float, width: int = 30):
+        """프로그레스 바 출력"""
+        filled = int(width * percent / 100)
+        bar = '█' * filled + '░' * (width - filled)
+        
+        if percent < 50:
+            color = Colors.GREEN
+        elif percent < 80:
+            color = Colors.WARNING
+        else:
+            color = Colors.FAIL
+        
+        print(f"  {label:8} [{color}{bar}{Colors.ENDC}] {percent:5.1f}%")
+    
+    def check_client_status(self, ip: str) -> bool:
+        """클라이언트 온라인 상태 확인"""
+        try:
+            # ping으로 확인 (1회, 1초 타임아웃)
+            result = subprocess.run(
+                ['ping', '-c', '1', '-W', '1', ip],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+    
+    def manage_clients(self):
+        """클라이언트 관리 메뉴"""
+        while True:
+            self.print_header()
+            print(f"{Colors.BOLD}클라이언트 관리{Colors.ENDC}\n")
+            
+            # IP 주소로 클라이언트 정렬
+            sorted_clients = sorted(self.config['clients'], key=lambda c: self.ip_to_number(c.get('ip', 'N/A')))
+            
+            # 클라이언트 목록 표시
+            if sorted_clients:
+                print(f"{Colors.BOLD}등록된 클라이언트:{Colors.ENDC}")
+                print(f"  {'번호':<4} {'시리얼/호스트명':<15} {'IP 주소':<15} {'MAC 주소':<20}")
+                print(f"  {'-'*65}")
+                for i, client in enumerate(sorted_clients, 1):
+                    # 호스트명이 시리얼과 같으므로 시리얼만 표시
+                    serial = client['serial']
+                    ip = client.get('ip', 'N/A')
+                    mac = client.get('mac', 'N/A')
+                    print(f"  {i:<4} {serial:<15} {ip:<15} {mac:<20}")
+                print()
+            else:
+                print(f"{Colors.WARNING}등록된 클라이언트가 없습니다.{Colors.ENDC}\n")
+            
+            print(f"{Colors.BOLD}옵션:{Colors.ENDC}")
+            print(f"  {Colors.CYAN}1.{Colors.ENDC} 새 클라이언트 추가")
+            print(f"  {Colors.CYAN}2.{Colors.ENDC} 클라이언트 제거")
+            print(f"  {Colors.CYAN}3.{Colors.ENDC} 클라이언트 정보 편집")
+            print(f"  {Colors.CYAN}4.{Colors.ENDC} SD 카드에서 시스템 복사")
+            print(f"  {Colors.CYAN}5.{Colors.ENDC} 기존 클라이언트에서 복사 (템플릿)")
+            print(f"  {Colors.CYAN}R.{Colors.ENDC} 상태 새로고침")
+            print(f"  {Colors.CYAN}0.{Colors.ENDC} 뒤로 가기")
+            print()
+            
+            choice = input(f"{Colors.CYAN}선택: {Colors.ENDC}").strip().upper()
+            
+            if choice == '1':
+                self.add_client()
+            elif choice == '2':
+                self.remove_client()
+            elif choice == '3':
+                self.edit_client()
+            elif choice == '4':
+                self.copy_from_sd()
+            elif choice == '5':
+                self.copy_from_template()
+            elif choice == 'R':
+                print(f"{Colors.CYAN}상태를 새로고침합니다...{Colors.ENDC}")
+                continue  # 루프 다시 시작하여 상태 업데이트
+            elif choice == '0':
+                break
+    
+    def add_client(self):
+        """새 클라이언트 추가 (MAC 주소 자동 완성 지원)"""
+        self.print_header()
+        print(f"{Colors.BOLD}새 클라이언트 추가{Colors.ENDC}\n")
+        
+        # 기존 IP 주소에서 빈 번호 찾기
+        network_prefix = ".".join(self.config['server_ip'].split('.')[:3])
+        used_ip_numbers = []
+        for client in self.config['clients']:
+            if client.get('ip', '').startswith(network_prefix):
+                try:
+                    ip_num = int(client['ip'].split('.')[-1])
+                    used_ip_numbers.append(ip_num)
+                except:
+                    pass
+        
+        # 빈 번호 찾기 (100부터 시작)
+        suggested_ip = f"{network_prefix}.100"  # 기본값
+        if used_ip_numbers:
+            used_ip_numbers.sort()
+            # 100부터 시작해서 빈 번호 찾기
+            for num in range(100, max(used_ip_numbers) + 2):
+                if num not in used_ip_numbers:
+                    suggested_ip = f"{network_prefix}.{num}"
+                    break
+            
+            # 현재 사용 중인 IP 표시
+            print(f"{Colors.CYAN}※ 현재 사용 중: {', '.join([f'.{n}' for n in used_ip_numbers[:10]])}{Colors.ENDC}")
+            if len(used_ip_numbers) > 10:
+                print(f"{Colors.CYAN}              외 {len(used_ip_numbers) - 10}개{Colors.ENDC}")
+        
+        print(f"{Colors.CYAN}※ 권장: IP는 192.168.0.100부터 순서대로 할당{Colors.ENDC}")
+        
+        print(f"{Colors.CYAN}라즈베리파이 정보 입력{Colors.ENDC}")
+        print(f"{Colors.WARNING}팁: 모든 라즈베리파이 MAC 주소는 88:a2:9e:1b:로 시작합니다{Colors.ENDC}")
+        print(f"{Colors.WARNING}    마지막 4자리만 입력하면 자동 완성됩니다 (예: e3:0f){Colors.ENDC}\n")
+        
+        # 시리얼 번호 입력 (호스트명으로도 사용)
+        serial = input(f"시리얼 번호 (8자리 16진수): ").strip().lower()
+        if not serial:
+            print(f"{Colors.FAIL}시리얼 번호는 필수입니다{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # MAC 주소 입력 (짧은 형식 지원)
+        mac_input = input(f"MAC 주소 (전체 또는 마지막 4자리): ").strip().lower()
+        if not mac_input:
+            print(f"{Colors.FAIL}MAC 주소는 필수입니다{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # MAC 주소 자동 완성
+        if len(mac_input) == 5 and ':' in mac_input:  # e3:0f 형식
+            mac = f"88:a2:9e:1b:{mac_input}"
+            print(f"  → 자동 완성: {mac}")
+        elif len(mac_input) == 4:  # e30f 형식
+            mac = f"88:a2:9e:1b:{mac_input[:2]}:{mac_input[2:]}"
+            print(f"  → 자동 완성: {mac}")
+        else:
+            mac = mac_input
+        
+        # MAC 주소 유효성 검사
+        if not re.match(r'^([0-9a-f]{2}:){5}[0-9a-f]{2}$', mac):
+            print(f"{Colors.FAIL}올바른 MAC 주소 형식이 아닙니다{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # IP 주소 입력
+        ip_input = input(f"고정 IP 주소 [{suggested_ip}]: ").strip()
+        ip = ip_input if ip_input else suggested_ip
+        
+        # 중복 확인
+        for client in self.config['clients']:
+            if client['serial'] == serial:
+                print(f"{Colors.FAIL}이미 등록된 시리얼 번호입니다{Colors.ENDC}")
+                time.sleep(2)
+                return
+            if client.get('mac') == mac:
+                print(f"{Colors.FAIL}이미 등록된 MAC 주소입니다{Colors.ENDC}")
+                time.sleep(2)
+                return
+        
+        # 클라이언트 추가
+        new_client = {
+            'serial': serial,
+            'hostname': serial,  # 시리얼을 호스트명으로 사용
+            'mac': mac,
+            'ip': ip,
+            'online': False
+        }
+        
+        self.config['clients'].append(new_client)
+        self.save_config()
+        
+        print(f"\n{Colors.GREEN}✓ 클라이언트가 추가되었습니다{Colors.ENDC}")
+        print(f"  시리얼/호스트명: {serial}")
+        print(f"  MAC 주소: {mac}")
+        print(f"  IP 주소: {ip}")
+        
+        # PXE 부팅 설정 생성
+        self.create_client_directories(serial, mac, ip, serial)
+        
+        # 기존 클라이언트가 있으면 자동으로 시스템 복사
+        existing_clients = [c for c in self.config['clients'] if c['serial'] != serial]
+        if existing_clients:
+            # NFS 루트가 있는 클라이언트 찾기
+            for client in existing_clients:
+                nfs_path = Path(self.config['nfs_root']) / client['serial']
+                if nfs_path.exists() and (nfs_path / 'etc').exists():
+                    print(f"\n{Colors.CYAN}기존 클라이언트({client['serial']})에서 시스템을 자동 복사합니다...{Colors.ENDC}")
+                    self.copy_system_from_existing(client['serial'], serial, mac, ip, serial)
+                    break
+            else:
+                print(f"\n{Colors.YELLOW}시스템 파일이 없습니다. 나중에 SD 카드나 템플릿에서 복사하세요.{Colors.ENDC}")
+        else:
+            print(f"\n{Colors.YELLOW}첫 번째 클라이언트입니다. SD 카드에서 시스템을 복사하세요.{Colors.ENDC}")
+    
+    def copy_system_from_existing(self, source_serial: str, target_serial: str, mac: str, ip: str, hostname: str):
+        """기존 클라이언트에서 시스템 자동 복사"""
+        source_nfs = Path(self.config['nfs_root']) / source_serial
+        source_tftp = Path(self.config['tftp_root']) / source_serial
+        target_nfs = Path(self.config['nfs_root']) / target_serial
+        target_tftp = Path(self.config['tftp_root']) / target_serial
+        
+        try:
+            # TFTP boot 파일 복사
+            if source_tftp.exists():
+                print(f"  Boot 파일 복사 중...")
+                subprocess.run(['sudo', 'cp', '-a', str(source_tftp) + '/.', str(target_tftp)], check=True)
+                
+                # cmdline.txt 수정 - 매개변수로 받은 IP와 hostname 사용
+                cmdline_path = target_tftp / 'cmdline.txt'
+                if cmdline_path.exists():
+                    # 매개변수로 받은 정보 사용 (새 클라이언트는 아직 config에 없음)
+                    if ip:
+                        # 네트워크 설정
+                        network_base = '.'.join(self.config['server_ip'].split('.')[:3])
+                        gateway = f"{network_base}.1"
+                        netmask = "255.255.255.0"
+                        iface = "eth0"
+                        # 고정 IP 형식
+                        cmdline = f"console=serial0,115200 console=tty1 root=/dev/nfs nfsroot={self.config['server_ip']}:{target_nfs},vers=3 rw ip={ip}::{gateway}:{netmask}:{hostname}:{iface}:off rootwait elevator=deadline"
+                    else:
+                        # IP가 없으면 DHCP 사용 (fallback)
+                        cmdline = f"console=serial0,115200 console=tty1 root=/dev/nfs nfsroot={self.config['server_ip']}:{target_nfs},vers=3 rw ip=dhcp rootwait"
+                    subprocess.run(['sudo', 'tee', str(cmdline_path)], 
+                                 input=cmdline.encode(), 
+                                 stdout=subprocess.DEVNULL, check=True)
+            
+            # NFS root 파일시스템 복사
+            if source_nfs.exists():
+                print(f"  Root 파일시스템 복사 중...")
+                subprocess.run([
+                    'sudo', 'rsync', '-aHAXx', '--info=progress2',
+                    str(source_nfs) + '/', str(target_nfs) + '/'
+                ], check=True)
+                
+                # fstab 최소화
+                fstab_path = target_nfs / 'etc' / 'fstab'
+                if fstab_path.exists():
+                    minimal_fstab = """proc            /proc           proc    defaults          0       0
+tmpfs           /tmp            tmpfs   defaults,nosuid   0       0
+devpts          /dev/pts        devpts  gid=5,mode=620    0       0
+"""
+                    subprocess.run(['sudo', 'tee', str(fstab_path)], 
+                                 input=minimal_fstab.encode(), 
+                                 stdout=subprocess.DEVNULL, check=True)
+                
+                # hostname 설정
+                hostname_path = target_nfs / 'etc' / 'hostname'
+                if hostname_path.exists():
+                    subprocess.run(['sudo', 'tee', str(hostname_path)], 
+                                 input=hostname.encode(), 
+                                 stdout=subprocess.DEVNULL, check=True)
+                
+                # hosts 파일 수정
+                hosts_path = target_nfs / 'etc' / 'hosts'
+                if hosts_path.exists():
+                    # raspberrypi와 기존 호스트명을 새 호스트명으로 변경
+                    subprocess.run([
+                        'sudo', 'sed', '-i',
+                        f's/\\braspberrypi\\b/{hostname}/g',
+                        str(hosts_path)
+                    ], check=True)
+                    subprocess.run([
+                        'sudo', 'sed', '-i',
+                        f's/\\b{source_serial}\\b/{hostname}/g',
+                        str(hosts_path)
+                    ], check=True)
+                    
+                    # 127.0.1.1 라인 재설정
+                    subprocess.run([
+                        'sudo', 'sed', '-i',
+                        '/^127\\.0\\.1\\.1/d',
+                        str(hosts_path)
+                    ], check=True)
+                    hosts_line = f"127.0.1.1\t{hostname}\n"
+                    subprocess.run(['sudo', 'tee', '-a', str(hosts_path)],
+                                 input=hosts_line.encode(),
+                                 stdout=subprocess.DEVNULL, check=True)
+            
+            print(f"{Colors.GREEN}  ✓ 시스템 복사 완료!{Colors.ENDC}")
+            
+        except subprocess.CalledProcessError as e:
+            print(f"{Colors.FAIL}  시스템 복사 실패: {e}{Colors.ENDC}")
+    
+    def create_client_directories(self, serial: str, mac: str, ip: str, hostname: str):
+        """클라이언트용 디렉토리 생성 및 PXE 부팅 설정"""
+        nfs_path = Path(self.config['nfs_root']) / serial
+        tftp_path = Path(self.config['tftp_root']) / serial
+        
+        try:
+            # 디렉토리 생성
+            subprocess.run(['sudo', 'mkdir', '-p', str(nfs_path)], check=True)
+            subprocess.run(['sudo', 'mkdir', '-p', str(tftp_path)], check=True)
+            
+            # NFS 디렉토리 권한 설정 (모두에게 읽기/쓰기/실행 권한)
+            subprocess.run(['sudo', 'chmod', '777', str(nfs_path)], check=True)
+            
+            # 소유자 변경
+            current_user = os.environ.get('SUDO_USER', os.environ.get('USER', 'rpi-server'))
+            subprocess.run(['sudo', 'chown', f'{current_user}:{current_user}', str(nfs_path)], 
+                         stderr=subprocess.DEVNULL, check=False)
+            
+            # TFTP 디렉토리 권한 설정
+            subprocess.run(['sudo', 'chmod', '755', str(tftp_path)], check=True)
+            
+            print(f"\n{Colors.GREEN}✅ 디렉토리 생성 및 권한 설정 완료{Colors.ENDC}")
+            
+            # DHCP 설정 업데이트 (MAC 주소와 고정 IP 포함)
+            self.update_dhcp_config(serial, mac, ip, hostname)
+            
+            # NFS exports 업데이트
+            self.update_nfs_exports(serial)
+            
+            # TFTP 부트 파일 설정
+            self.setup_tftp_boot_files(serial)
+            
+            print(f"\n{Colors.GREEN}✅ PXE 부팅 설정 완료!{Colors.ENDC}")
+            print(f"  - NFS: {nfs_path}")
+            print(f"  - TFTP: {tftp_path}")
+            print(f"  - 고정 IP: {ip} (MAC: {mac})")
+            
+        except subprocess.CalledProcessError as e:
+            print(f"{Colors.FAIL}설정 실패: {e}{Colors.ENDC}")
+    
+    def update_dhcp_config(self, serial: str, mac: str, ip: str, hostname: str):
+        """DHCP/TFTP 설정 업데이트 - 통합 설정 파일에 추가"""
+        print(f"{Colors.CYAN}DHCP 설정 업데이트 중...{Colors.ENDC}")
+        
+        # 클라이언트 정보를 설정에 추가/업데이트
+        client_exists = False
+        for client in self.config.get('clients', []):
+            if client['serial'] == serial:
+                client['mac'] = mac
+                client['ip'] = ip
+                client['hostname'] = hostname
+                client_exists = True
+                break
+        
+        if not client_exists:
+            if 'clients' not in self.config:
+                self.config['clients'] = []
+            self.config['clients'].append({
+                'serial': serial,
+                'mac': mac,
+                'ip': ip,
+                'hostname': hostname,
+                'online': False
+            })
+        
+        # 설정 저장
+        self.save_config()
+        
+        # 통합 dnsmasq 설정 재생성
+        self.generate_dnsmasq_config()
+        
+        print(f"{Colors.GREEN}  ✓ DHCP 고정 IP 설정 완료 ({mac} → {ip}){Colors.ENDC}")
+    
+    def update_nfs_exports(self, serial: str):
+        """NFS exports 파일 업데이트"""
+        print(f"{Colors.CYAN}NFS exports 업데이트 중...{Colors.ENDC}")
+        
+        nfs_path = f"{self.config['nfs_root']}/{serial}"
+        export_line = f"{nfs_path} *(rw,sync,no_subtree_check,no_root_squash)\n"
+        
+        try:
+            # 현재 exports 읽기
+            current_exports = ""
+            try:
+                with open('/etc/exports', 'r') as f:
+                    current_exports = f.read()
+            except:
+                pass
+            
+            # 이미 있는지 확인
+            if nfs_path not in current_exports:
+                # 추가
+                temp_exports = os.path.expanduser('~/exports_append.tmp')
+                with open(temp_exports, 'w') as f:
+                    f.write(export_line)
+                
+                subprocess.run(['sudo', 'bash', '-c', 
+                              f'cat {temp_exports} >> /etc/exports'], 
+                              check=True)
+                os.remove(temp_exports)
+                
+                # NFS 서비스 재시작
+                subprocess.run(['sudo', 'exportfs', '-ra'], check=True)
+                subprocess.run(['sudo', 'systemctl', 'restart', 'nfs-kernel-server'],
+                             stderr=subprocess.DEVNULL)
+                
+                print(f"{Colors.GREEN}  ✓ NFS exports 완료{Colors.ENDC}")
+            else:
+                print(f"{Colors.GREEN}  ✓ NFS exports 이미 설정됨{Colors.ENDC}")
+                
+        except Exception as e:
+            print(f"{Colors.WARNING}  ! NFS 설정 실패: {e}{Colors.ENDC}")
+    
+    def setup_tftp_boot_files(self, serial: str):
+        """TFTP 부트 파일 설정"""
+        print(f"{Colors.CYAN}TFTP 부트 파일 설정 중...{Colors.ENDC}")
+        
+        tftp_path = Path(self.config['tftp_root']) / serial
+        
+        # 클라이언트 정보에서 IP와 hostname 가져오기
+        client_info = next((c for c in self.config['clients'] if c['serial'] == serial), None)
+        if client_info:
+            client_ip = client_info.get('ip', '')
+            hostname = client_info.get('hostname', serial)
+        else:
+            client_ip = ''
+            hostname = serial
+        
+        try:
+            # cmdline.txt 생성 (고정 IP로 NFS 부팅 설정)
+            network_base = '.'.join(self.config['server_ip'].split('.')[:3])
+            gateway = f"{network_base}.1"
+            netmask = "255.255.255.0"
+            iface = "eth0"
+            
+            if client_ip:
+                # 고정 IP 명시 방식
+                cmdline = f"console=serial0,115200 console=tty1 root=/dev/nfs nfsroot={self.config['server_ip']}:{self.config['nfs_root']}/{serial},vers=3 rw ip={client_ip}::{gateway}:{netmask}:{hostname}:{iface}:off rootwait elevator=deadline"
+            else:
+                # IP가 없으면 DHCP 사용 (fallback)
+                cmdline = f"console=serial0,115200 console=tty1 root=/dev/nfs nfsroot={self.config['server_ip']}:{self.config['nfs_root']}/{serial},vers=3 rw ip=dhcp rootwait"
+            
+            cmdline_file = tftp_path / 'cmdline.txt'
+            temp_cmdline = os.path.expanduser('~/cmdline.txt.tmp')
+            with open(temp_cmdline, 'w') as f:
+                f.write(cmdline)
+            
+            subprocess.run(['sudo', 'cp', temp_cmdline, str(cmdline_file)], check=True)
+            os.remove(temp_cmdline)
+            
+            # config.txt 생성 (기본 설정)
+            config = """# Network Boot Configuration
+enable_uart=1
+kernel=kernel8.img
+"""
+            config_file = tftp_path / 'config.txt'
+            temp_config = os.path.expanduser('~/config.txt.tmp')
+            with open(temp_config, 'w') as f:
+                f.write(config)
+            
+            subprocess.run(['sudo', 'cp', temp_config, str(config_file)], check=True)
+            os.remove(temp_config)
+            
+            print(f"{Colors.GREEN}  ✓ TFTP 부트 파일 생성 완료{Colors.ENDC}")
+            
+        except Exception as e:
+            print(f"{Colors.WARNING}  ! TFTP 설정 실패: {e}{Colors.ENDC}")
+    
+    def list_clients(self):
+        """클라이언트 목록 반환"""
+        clients = {}
+        for client in self.config['clients']:
+            clients[client['serial']] = {
+                'hostname': client.get('hostname', 'Unknown'),
+                'mac': client.get('mac', 'N/A'),
+                'ip': client.get('ip', 'N/A')
+            }
+        return clients
+    
+    def remove_client(self):
+        """클라이언트 제거"""
+        if not self.config['clients']:
+            print(f"{Colors.WARNING}제거할 클라이언트가 없습니다.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        self.print_header()
+        print(f"{Colors.BOLD}클라이언트 제거{Colors.ENDC}\n")
+        
+        # IP 주소로 클라이언트 정렬
+        sorted_clients = sorted(self.config['clients'], key=lambda c: self.ip_to_number(c.get('ip', 'N/A')))
+        
+        for i, client in enumerate(sorted_clients, 1):
+            print(f"  {i}. {client['serial']} - {client.get('hostname', 'N/A')} - IP: {client.get('ip', 'N/A')}")
+        print()
+        
+        try:
+            idx = int(input("제거할 클라이언트 번호: ")) - 1
+            if 0 <= idx < len(sorted_clients):
+                # 정렬된 목록에서 선택한 클라이언트 찾기
+                selected_client = sorted_clients[idx]
+                serial = selected_client['serial']
+                
+                # 확인 메시지
+                print(f"\n{Colors.WARNING}경고: 이 작업은 되돌릴 수 없습니다!{Colors.ENDC}")
+                print(f"다음 항목들이 삭제됩니다:")
+                print(f"  - NFS 디렉토리: {self.config['nfs_root']}/{serial}")
+                print(f"  - TFTP 디렉토리: {self.config['tftp_root']}/{serial}")
+                print(f"  - DHCP 설정: /etc/dnsmasq.d/client-{serial}.conf")
+                print(f"  - NFS exports 항목")
+                
+                confirm = input(f"\n정말 제거하시겠습니까? (y/N): ").lower()
+                if confirm != 'y':
+                    print(f"{Colors.WARNING}취소되었습니다.{Colors.ENDC}")
+                    time.sleep(1)
+                    return
+                
+                print(f"\n{Colors.CYAN}클라이언트 제거 중...{Colors.ENDC}")
+                
+                # 1. NFS 디렉토리 삭제
+                nfs_path = f"{self.config['nfs_root']}/{serial}"
+                try:
+                    subprocess.run(['sudo', 'rm', '-rf', nfs_path], check=True)
+                    print(f"  ✓ NFS 디렉토리 삭제: {nfs_path}")
+                except:
+                    print(f"  ⚠️  NFS 디렉토리 삭제 실패: {nfs_path}")
+                
+                # 2. TFTP 디렉토리 삭제
+                tftp_path = f"{self.config['tftp_root']}/{serial}"
+                try:
+                    subprocess.run(['sudo', 'rm', '-rf', tftp_path], check=True)
+                    print(f"  ✓ TFTP 디렉토리 삭제: {tftp_path}")
+                except:
+                    print(f"  ⚠️  TFTP 디렉토리 삭제 실패: {tftp_path}")
+                
+                # 3. DHCP 설정 파일 삭제
+                dhcp_conf = f"/etc/dnsmasq.d/client-{serial}.conf"
+                try:
+                    subprocess.run(['sudo', 'rm', '-f', dhcp_conf], check=True)
+                    print(f"  ✓ DHCP 설정 삭제: {dhcp_conf}")
+                except:
+                    print(f"  ⚠️  DHCP 설정 삭제 실패: {dhcp_conf}")
+                
+                # 4. NFS exports에서 항목 제거
+                try:
+                    # exports 파일 읽기
+                    exports_content = subprocess.run(['sudo', 'cat', '/etc/exports'], 
+                                                   capture_output=True, text=True).stdout
+                    
+                    # 해당 클라이언트 라인 제거
+                    new_exports = []
+                    for line in exports_content.split('\n'):
+                        if serial not in line:
+                            new_exports.append(line)
+                    
+                    # 새 exports 파일 작성
+                    temp_exports = os.path.expanduser('~/exports_new.tmp')
+                    with open(temp_exports, 'w') as f:
+                        f.write('\n'.join(new_exports))
+                    
+                    subprocess.run(['sudo', 'cp', temp_exports, '/etc/exports'], check=True)
+                    os.remove(temp_exports)
+                    
+                    # NFS exports 다시 로드
+                    subprocess.run(['sudo', 'exportfs', '-ra'], stderr=subprocess.DEVNULL)
+                    print(f"  ✓ NFS exports 항목 제거")
+                except:
+                    print(f"  ⚠️  NFS exports 업데이트 실패")
+                
+                # 5. dnsmasq 재시작
+                try:
+                    subprocess.run(['sudo', 'systemctl', 'restart', 'dnsmasq'], 
+                                 stderr=subprocess.DEVNULL)
+                    print(f"  ✓ DHCP 서비스 재시작")
+                except:
+                    print(f"  ⚠️  DHCP 서비스 재시작 실패")
+                
+                # 6. 설정에서 제거
+                self.config['clients'].remove(selected_client)
+                self.save_config()
+                
+                print(f"\n{Colors.GREEN}✅ {serial} 클라이언트가 완전히 제거되었습니다.{Colors.ENDC}")
+            else:
+                print(f"{Colors.FAIL}잘못된 번호입니다.{Colors.ENDC}")
+        except ValueError:
+            print(f"{Colors.FAIL}숫자를 입력해주세요.{Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.FAIL}제거 중 오류 발생: {e}{Colors.ENDC}")
+        
+        time.sleep(2)
+    
+    def edit_client(self):
+        """클라이언트 정보 편집"""
+        if not self.config['clients']:
+            print(f"{Colors.WARNING}편집할 클라이언트가 없습니다.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        self.print_header()
+        print(f"{Colors.BOLD}클라이언트 정보 편집{Colors.ENDC}\n")
+        
+        # IP 주소로 클라이언트 정렬
+        sorted_clients = sorted(self.config['clients'], key=lambda c: self.ip_to_number(c.get('ip', 'N/A')))
+        
+        # 클라이언트 목록 표시
+        for i, client in enumerate(sorted_clients, 1):
+            print(f"  {i}. {client['serial']} - {client.get('hostname', 'N/A')}")
+            print(f"     MAC: {client.get('mac', '없음')}")
+            print(f"     IP: {client.get('ip', '없음')}")
+        print()
+        
+        try:
+            idx = int(input("편집할 클라이언트 번호: ")) - 1
+            if 0 <= idx < len(sorted_clients):
+                # 정렬된 목록에서 선택한 클라이언트 찾기
+                selected_client = sorted_clients[idx]
+                # 원본 리스트에서 해당 클라이언트의 인덱스 찾기
+                original_idx = self.config['clients'].index(selected_client)
+                client = self.config['clients'][original_idx]
+                
+                print(f"\n현재 정보:")
+                print(f"  시리얼: {client['serial']}")
+                print(f"  MAC: {client.get('mac', '없음')}")
+                print(f"  IP: {client.get('ip', '없음')}")
+                print(f"  호스트명: {client.get('hostname', '없음')}")
+                
+                # MAC 주소 수정/추가
+                current_mac = client.get('mac', '')
+                new_mac = input(f"\n새 MAC 주소 (Enter=유지, 현재: {current_mac}): ").strip().lower()
+                if new_mac:
+                    # MAC 주소 형식 검증
+                    if ':' in new_mac or '-' in new_mac:
+                        new_mac = new_mac.replace('-', ':')
+                        parts = new_mac.split(':')
+                        if len(parts) == 6 and all(len(p) == 2 for p in parts):
+                            client['mac'] = new_mac
+                        else:
+                            print(f"{Colors.FAIL}올바른 MAC 주소 형식이 아닙니다.{Colors.ENDC}")
+                
+                # IP 주소 수정/추가
+                if not client.get('ip'):
+                    # IP가 없으면 자동 할당
+                    used_ips = [c.get('ip') for c in self.config['clients'] if c.get('ip') and c != client]
+                    network_prefix = ".".join(self.config['dhcp_range_start'].split('.')[:3])
+                    start_num = int(self.config['dhcp_range_start'].split('.')[-1])
+                    
+                    suggested_ip = None
+                    for i in range(start_num, start_num + 100):
+                        test_ip = f"{network_prefix}.{i}"
+                        if test_ip not in used_ips:
+                            suggested_ip = test_ip
+                            break
+                    
+                    new_ip = input(f"고정 IP 주소 (Enter={suggested_ip}): ").strip()
+                    client['ip'] = new_ip if new_ip else suggested_ip
+                else:
+                    new_ip = input(f"새 IP 주소 (Enter=유지, 현재: {client['ip']}): ").strip()
+                    if new_ip:
+                        client['ip'] = new_ip
+                
+                # 호스트명 수정
+                old_hostname = client.get('hostname', client['serial'])
+                new_hostname = input(f"새 호스트명 (Enter=유지, 현재: {old_hostname}): ").strip()
+                if new_hostname and new_hostname != old_hostname:
+                    client['hostname'] = new_hostname
+                    
+                    # 실제 클라이언트 파일 시스템에 호스트명 업데이트
+                    nfs_path = Path(self.config['nfs_root']) / client['serial']
+                    
+                    # /etc/hostname 파일 업데이트
+                    hostname_path = nfs_path / 'etc' / 'hostname'
+                    if hostname_path.exists():
+                        print(f"  호스트명 파일 업데이트 중...")
+                        subprocess.run(['sudo', 'tee', str(hostname_path)], 
+                                     input=new_hostname.encode(), 
+                                     stdout=subprocess.DEVNULL, check=True)
+                    
+                    # /etc/hosts 파일 업데이트
+                    hosts_path = nfs_path / 'etc' / 'hosts'
+                    if hosts_path.exists():
+                        print(f"  hosts 파일 업데이트 중...")
+                        # 먼저 기존 호스트명을 새 호스트명으로 변경
+                        subprocess.run([
+                            'sudo', 'sed', '-i',
+                            f's/\\b{old_hostname}\\b/{new_hostname}/g',
+                            str(hosts_path)
+                        ], check=True)
+                        
+                        # raspberrypi가 남아있으면 그것도 변경
+                        subprocess.run([
+                            'sudo', 'sed', '-i',
+                            f's/\\braspberrypi\\b/{new_hostname}/g',
+                            str(hosts_path)
+                        ], check=True)
+                    
+                    print(f"{Colors.GREEN}  ✓ 클라이언트 파일 시스템의 호스트명이 업데이트되었습니다{Colors.ENDC}")
+                    print(f"{Colors.YELLOW}  ※ 변경사항 적용을 위해 클라이언트를 재부팅해주세요{Colors.ENDC}")
+                
+                self.config['clients'][original_idx] = client
+                self.save_config()
+                
+                print(f"\n{Colors.GREEN}✅ 클라이언트 정보가 업데이트되었습니다.{Colors.ENDC}")
+                
+                # 설정 파일 재생성
+                if client.get('mac') and client.get('ip'):
+                    print("\nPXE 설정을 업데이트합니다...")
+                    self.update_dhcp_config(client['serial'], client['mac'], client['ip'], client.get('hostname', f"rpi-{client['serial'][-6:]}"))
+                
+            else:
+                print(f"{Colors.FAIL}잘못된 번호입니다.{Colors.ENDC}")
+        except ValueError:
+            print(f"{Colors.FAIL}숫자를 입력해주세요.{Colors.ENDC}")
+        
+        time.sleep(2)
+    
+    def copy_from_sd(self):
+        """SD 카드에서 시스템 복사"""
+        self.print_header()
+        print(f"{Colors.BOLD}SD 카드에서 시스템 복사{Colors.ENDC}\n")
+        
+        # 클라이언트 목록 확인
+        clients = self.list_clients()
+        if not clients:
+            print(f"{Colors.FAIL}등록된 클라이언트가 없습니다. 먼저 클라이언트를 추가하세요.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # 클라이언트 선택
+        print(f"{Colors.BOLD}대상 클라이언트 선택:{Colors.ENDC}")
+        for idx, (serial, info) in enumerate(clients.items(), 1):
+            hostname = info.get('hostname', 'Unknown')
+            print(f"  {Colors.CYAN}{idx}.{Colors.ENDC} {serial} ({hostname})")
+        print()
+        
+        try:
+            choice = int(input(f"{Colors.CYAN}클라이언트 번호: {Colors.ENDC}"))
+            if choice < 1 or choice > len(clients):
+                print(f"{Colors.FAIL}잘못된 번호입니다.{Colors.ENDC}")
+                time.sleep(2)
+                return
+            
+            serial = list(clients.keys())[choice - 1]
+        except ValueError:
+            print(f"{Colors.FAIL}잘못된 입력입니다.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # SD 카드 감지
+        print(f"\n{Colors.BOLD}SD 카드 감지 중...{Colors.ENDC}")
+        result = subprocess.run(['lsblk', '-o', 'NAME,SIZE,TYPE,MOUNTPOINT', '-p', '--raw'], 
+                              capture_output=True, text=True)
+        
+        # SD 카드 파티션 찾기
+        lines = result.stdout.strip().split('\n')
+        devices = []
+        for line in lines[1:]:  # 헤더 제외
+            parts = line.split()
+            if len(parts) >= 3:
+                name = parts[0]
+                # 트리 문자 제거
+                name = name.replace('├─', '').replace('└─', '').replace('│', '').strip()
+                if '/dev/sd' in name or '/dev/mmcblk' in name:
+                    # 파티션이 있는 디스크만
+                    if any(char.isdigit() for char in name.split('/')[-1]):
+                        parts[0] = name  # 정리된 이름으로 교체
+                        devices.append(parts)
+        
+        if not devices:
+            print(f"{Colors.FAIL}SD 카드를 찾을 수 없습니다.{Colors.ENDC}")
+            print(f"{Colors.WARNING}SD 카드가 삽입되어 있는지 확인하세요.{Colors.ENDC}")
+            time.sleep(3)
+            return
+        
+        print(f"\n{Colors.BOLD}감지된 파티션:{Colors.ENDC}")
+        print(f"{'번호':<5} {'장치':<20} {'크기':<10} {'마운트':<20}")
+        print("-" * 55)
+        for idx, parts in enumerate(devices, 1):
+            name = parts[0]
+            size = parts[1] if len(parts) > 1 else 'N/A'
+            mount = parts[-1] if len(parts) > 3 and parts[-1].startswith('/') else 'Not mounted'
+            print(f"{idx:<5} {name:<20} {size:<10} {mount:<20}")
+        
+        print(f"\n{Colors.WARNING}일반적으로 Raspberry Pi OS는 2개의 파티션을 가집니다:{Colors.ENDC}")
+        print(f"  - boot 파티션 (FAT32, 약 256MB)")
+        print(f"  - root 파티션 (ext4, 나머지 용량)")
+        
+        # 파티션 선택
+        boot_num = input(f"\n{Colors.CYAN}boot 파티션 번호: {Colors.ENDC}").strip()
+        root_num = input(f"{Colors.CYAN}root 파티션 번호: {Colors.ENDC}").strip()
+        
+        try:
+            boot_idx = int(boot_num) - 1
+            root_idx = int(root_num) - 1
+            
+            if boot_idx < 0 or boot_idx >= len(devices) or root_idx < 0 or root_idx >= len(devices):
+                raise ValueError
+            
+            boot_device = devices[boot_idx][0]
+            root_device = devices[root_idx][0]
+        except (ValueError, IndexError):
+            print(f"{Colors.FAIL}잘못된 파티션 번호입니다.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # 대상 경로 확인
+        nfs_path = os.path.join(self.config['nfs_root'], serial)
+        tftp_path = os.path.join(self.config['tftp_root'], serial)
+        
+        print(f"\n{Colors.BOLD}복사 정보:{Colors.ENDC}")
+        print(f"  Boot 파티션: {boot_device} → {tftp_path}")
+        print(f"  Root 파티션: {root_device} → {nfs_path}")
+        
+        confirm = input(f"\n{Colors.WARNING}계속하시겠습니까? (y/n): {Colors.ENDC}").lower()
+        if confirm != 'y':
+            print(f"{Colors.WARNING}취소되었습니다.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # 임시 마운트 포인트 생성
+        temp_boot = f"/tmp/sd_boot_{serial}"
+        temp_root = f"/tmp/sd_root_{serial}"
+        
+        try:
+            # 임시 디렉토리 생성
+            subprocess.run(['sudo', 'mkdir', '-p', temp_boot, temp_root], check=True)
+            
+            # SD 카드 마운트
+            print(f"\n{Colors.WARNING}SD 카드 마운트 중...{Colors.ENDC}")
+            subprocess.run(['sudo', 'mount', boot_device, temp_boot], check=True)
+            subprocess.run(['sudo', 'mount', root_device, temp_root], check=True)
+            
+            # 복사 시작
+            print(f"{Colors.WARNING}시스템 복사 중... (시간이 걸릴 수 있습니다){Colors.ENDC}")
+            
+            # Boot 파티션 복사
+            print(f"  Boot 파티션 복사 중...")
+            subprocess.run(['sudo', 'cp', '-a', f"{temp_boot}/.", tftp_path], check=True)
+            
+            # Root 파티션 복사 (rsync 사용)
+            print(f"  Root 파티션 복사 중... (몇 분 소요)")
+            subprocess.run([
+                'sudo', 'rsync', '-aHAXx', '--info=progress2',
+                f"{temp_root}/", f"{nfs_path}/"
+            ], check=True)
+            
+            # cmdline.txt 수정 (네트워크 부팅용 - 고정 IP 명시)
+            cmdline_path = os.path.join(tftp_path, 'cmdline.txt')
+            
+            # 클라이언트 정보에서 IP와 hostname 가져오기
+            client_info = next((c for c in self.config['clients'] if c['serial'] == serial), None)
+            if client_info:
+                client_ip = client_info.get('ip', '')
+                hostname = client_info.get('hostname', serial)
+            else:
+                client_ip = ''
+                hostname = serial
+            
+            # 네트워크 설정
+            network_base = '.'.join(self.config['server_ip'].split('.')[:3])
+            gateway = f"{network_base}.1"
+            netmask = "255.255.255.0"
+            iface = "eth0"
+            
+            if client_ip:
+                # 고정 IP 명시 방식
+                cmdline = f"console=serial0,115200 console=tty1 root=/dev/nfs nfsroot={self.config['server_ip']}:{nfs_path},vers=3 rw ip={client_ip}::{gateway}:{netmask}:{hostname}:{iface}:off rootwait elevator=deadline"
+            else:
+                # IP가 없으면 DHCP 사용 (fallback)
+                cmdline = f"console=serial0,115200 console=tty1 root=/dev/nfs nfsroot={self.config['server_ip']}:{nfs_path},vers=3 rw ip=dhcp rootwait"
+            
+            # cmdline.txt 업데이트
+            subprocess.run(['sudo', 'tee', cmdline_path], input=cmdline.encode(), 
+                         stdout=subprocess.DEVNULL, check=True)
+            print(f"  cmdline.txt 업데이트 완료 (IP: {client_ip if client_ip else 'DHCP'})")
+            
+            # fstab 수정 (최소 설정으로 단순화)
+            fstab_path = os.path.join(nfs_path, 'etc', 'fstab')
+            if os.path.exists(fstab_path):
+                # 최소한의 fstab 설정만 유지 (working client 참조)
+                minimal_fstab = """proc            /proc           proc    defaults          0       0
+tmpfs           /tmp            tmpfs   defaults,nosuid   0       0
+devpts          /dev/pts        devpts  gid=5,mode=620    0       0
+"""
+                subprocess.run(['sudo', 'tee', fstab_path], 
+                             input=minimal_fstab.encode(), stdout=subprocess.DEVNULL, check=True)
+                print(f"  fstab 단순화 완료 (최소 설정)")
+            
+            # Root 계정은 기본 상태 유지 (잠금 상태 * 유지)
+            # Raspberry Pi OS는 기본적으로 pi 사용자로 접근하도록 설계됨
+            print(f"  보안 설정 유지 (pi 사용자 사용)")
+            
+            # hostname 설정 (시리얼 번호 사용)
+            hostname_path = os.path.join(nfs_path, 'etc', 'hostname')
+            if os.path.exists(hostname_path):
+                # 클라이언트 정보에서 hostname 가져오기 (시리얼 번호)
+                client_info = next((c for c in self.config['clients'] if c['serial'] == serial), None)
+                if client_info:
+                    hostname = client_info.get('hostname', serial)
+                else:
+                    hostname = serial
+                    
+                subprocess.run(['sudo', 'tee', hostname_path], 
+                             input=hostname.encode(), 
+                             stdout=subprocess.DEVNULL, check=True)
+                print(f"  hostname 설정 완료: {hostname}")
+                
+                # /etc/hosts 파일도 수정
+                hosts_path = os.path.join(nfs_path, 'etc', 'hosts')
+                if os.path.exists(hosts_path):
+                    # 기존 raspberrypi를 새 hostname으로 변경
+                    subprocess.run([
+                        'sudo', 'sed', '-i',
+                        f's/\\braspberrypi\\b/{hostname}/g',
+                        hosts_path
+                    ], check=True)
+                    
+                    # 127.0.1.1 라인이 있는지 확인하고 수정
+                    subprocess.run([
+                        'sudo', 'sed', '-i',
+                        f'/^127\\.0\\.1\\.1/d',  # 기존 127.0.1.1 라인 삭제
+                        hosts_path
+                    ], check=True)
+                    
+                    # 새로운 127.0.1.1 라인 추가
+                    hosts_line = f"127.0.1.1\t{hostname}\n"
+                    subprocess.run(['sudo', 'tee', '-a', hosts_path],
+                                 input=hosts_line.encode(),
+                                 stdout=subprocess.DEVNULL, check=True)
+                    print(f"  /etc/hosts 업데이트 완료")
+            
+            # NFS 권한 설정 (모두에게 읽기/쓰기/실행 권한)
+            subprocess.run(['sudo', 'chmod', '-R', '777', nfs_path], check=True)
+            print(f"  NFS 디렉토리 권한 설정 완료 (777)")
+            
+            # 소유자 변경
+            current_user = os.environ.get('SUDO_USER', os.environ.get('USER', 'rpi-server'))
+            subprocess.run(['sudo', 'chown', '-R', f'{current_user}:{current_user}', nfs_path], 
+                         stderr=subprocess.DEVNULL, check=False)
+            print(f"  NFS 디렉토리 소유자 변경 완료 ({current_user})")
+            
+            print(f"\n{Colors.GREEN}✅ SD 카드 시스템 복사가 완료되었습니다!{Colors.ENDC}")
+            print(f"{Colors.GREEN}클라이언트 {serial}이 네트워크 부팅할 준비가 되었습니다.{Colors.ENDC}")
+            
+        except subprocess.CalledProcessError as e:
+            print(f"{Colors.FAIL}오류 발생: {e}{Colors.ENDC}")
+        finally:
+            # 언마운트
+            print(f"\n정리 중...")
+            subprocess.run(['sudo', 'umount', temp_boot], stderr=subprocess.DEVNULL)
+            subprocess.run(['sudo', 'umount', temp_root], stderr=subprocess.DEVNULL)
+            subprocess.run(['sudo', 'rmdir', temp_boot, temp_root], stderr=subprocess.DEVNULL)
+        
+        time.sleep(3)
+    
+    def copy_from_template(self):
+        """기존 클라이언트에서 시스템 복사 (템플릿)"""
+        self.print_header()
+        print(f"{Colors.BOLD}기존 클라이언트에서 시스템 복사 (템플릿){Colors.ENDC}\n")
+        
+        # 클라이언트 목록 확인
+        clients = self.list_clients()
+        if not clients:
+            print(f"{Colors.FAIL}등록된 클라이언트가 없습니다. 먼저 클라이언트를 추가하세요.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # 복사 가능한 클라이언트 찾기 (시스템 파일이 있는 클라이언트)
+        available_templates = {}
+        for serial, info in clients.items():
+            nfs_path = os.path.join(self.config['nfs_root'], serial)
+            tftp_path = os.path.join(self.config['tftp_root'], serial)
+            
+            # 실제 시스템이 존재하는지 확인
+            has_root = os.path.exists(os.path.join(nfs_path, 'etc'))
+            has_boot = os.path.exists(os.path.join(tftp_path, 'cmdline.txt')) or \
+                      os.path.exists(os.path.join(tftp_path, 'kernel8.img'))
+            
+            if has_root or has_boot:
+                available_templates[serial] = {
+                    'hostname': info.get('hostname', 'Unknown'),
+                    'has_root': has_root,
+                    'has_boot': has_boot
+                }
+        
+        if not available_templates:
+            print(f"{Colors.FAIL}복사 가능한 템플릿 클라이언트가 없습니다.{Colors.ENDC}")
+            print(f"{Colors.WARNING}먼저 SD 카드에서 시스템을 복사해주세요.{Colors.ENDC}")
+            time.sleep(3)
+            return
+        
+        # 소스 클라이언트 선택
+        print(f"{Colors.BOLD}템플릿으로 사용할 클라이언트 선택:{Colors.ENDC}")
+        template_list = list(available_templates.items())
+        for idx, (serial, info) in enumerate(template_list, 1):
+            status = []
+            if info['has_boot']:
+                status.append("Boot ✓")
+            if info['has_root']:
+                status.append("Root ✓")
+            status_str = ", ".join(status)
+            print(f"  {Colors.CYAN}{idx}.{Colors.ENDC} {serial} ({info['hostname']}) - [{status_str}]")
+        print()
+        
+        try:
+            choice = int(input(f"{Colors.CYAN}템플릿 번호: {Colors.ENDC}"))
+            if choice < 1 or choice > len(template_list):
+                print(f"{Colors.FAIL}잘못된 번호입니다.{Colors.ENDC}")
+                time.sleep(2)
+                return
+            
+            source_serial = template_list[choice - 1][0]
+            source_info = template_list[choice - 1][1]
+        except ValueError:
+            print(f"{Colors.FAIL}잘못된 입력입니다.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # 대상 클라이언트 선택
+        print(f"\n{Colors.BOLD}복사할 대상 클라이언트 선택:{Colors.ENDC}")
+        target_clients = [(s, i) for s, i in clients.items() if s != source_serial]
+        
+        if not target_clients:
+            print(f"{Colors.FAIL}복사할 대상 클라이언트가 없습니다.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        for idx, (serial, info) in enumerate(target_clients, 1):
+            hostname = info.get('hostname', 'Unknown')
+            print(f"  {Colors.CYAN}{idx}.{Colors.ENDC} {serial} ({hostname})")
+        print()
+        
+        try:
+            choice = int(input(f"{Colors.CYAN}대상 클라이언트 번호: {Colors.ENDC}"))
+            if choice < 1 or choice > len(target_clients):
+                print(f"{Colors.FAIL}잘못된 번호입니다.{Colors.ENDC}")
+                time.sleep(2)
+                return
+            
+            target_serial = target_clients[choice - 1][0]
+            target_info = target_clients[choice - 1][1]
+        except ValueError:
+            print(f"{Colors.FAIL}잘못된 입력입니다.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # 복사 옵션 선택
+        print(f"\n{Colors.BOLD}복사 옵션:{Colors.ENDC}")
+        copy_boot = False
+        copy_root = False
+        
+        if source_info['has_boot']:
+            copy_boot_input = input(f"  Boot 파티션을 복사하시겠습니까? (y/n): ").lower()
+            copy_boot = copy_boot_input == 'y'
+        
+        if source_info['has_root']:
+            copy_root_input = input(f"  Root 파티션을 복사하시겠습니까? (y/n): ").lower()
+            copy_root = copy_root_input == 'y'
+        
+        if not copy_boot and not copy_root:
+            print(f"{Colors.WARNING}복사할 항목이 선택되지 않았습니다.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # 경로 설정
+        source_nfs = os.path.join(self.config['nfs_root'], source_serial)
+        source_tftp = os.path.join(self.config['tftp_root'], source_serial)
+        target_nfs = os.path.join(self.config['nfs_root'], target_serial)
+        target_tftp = os.path.join(self.config['tftp_root'], target_serial)
+        
+        # 복사 정보 확인
+        print(f"\n{Colors.BOLD}복사 정보:{Colors.ENDC}")
+        print(f"  소스: {source_serial} ({source_info['hostname']})")
+        print(f"  대상: {target_serial} ({target_info['hostname']})")
+        if copy_boot:
+            print(f"  Boot: {source_tftp} → {target_tftp}")
+        if copy_root:
+            print(f"  Root: {source_nfs} → {target_nfs}")
+        
+        confirm = input(f"\n{Colors.WARNING}계속하시겠습니까? 기존 데이터는 덮어쓰여집니다. (y/n): {Colors.ENDC}").lower()
+        if confirm != 'y':
+            print(f"{Colors.WARNING}취소되었습니다.{Colors.ENDC}")
+            time.sleep(2)
+            return
+        
+        # 복사 시작
+        try:
+            if copy_boot:
+                print(f"\n{Colors.WARNING}Boot 파티션 복사 중...{Colors.ENDC}")
+                # 기존 디렉토리 삭제 후 복사
+                subprocess.run(['sudo', 'rm', '-rf', target_tftp], stderr=subprocess.DEVNULL)
+                subprocess.run(['sudo', 'cp', '-a', source_tftp, target_tftp], check=True)
+                
+                # cmdline.txt 수정 (대상 클라이언트용 - 고정 IP 명시)
+                cmdline_path = os.path.join(target_tftp, 'cmdline.txt')
+                
+                # 대상 클라이언트의 IP와 hostname 가져오기
+                target_client_info = next((c for c in self.config['clients'] if c['serial'] == target_serial), None)
+                if target_client_info:
+                    target_ip = target_client_info.get('ip', '')
+                    target_hostname = target_client_info.get('hostname', target_serial)
+                else:
+                    target_ip = ''
+                    target_hostname = target_serial
+                
+                # 네트워크 설정
+                network_base = '.'.join(self.config['server_ip'].split('.')[:3])
+                gateway = f"{network_base}.1"
+                netmask = "255.255.255.0"
+                iface = "eth0"
+                
+                if target_ip:
+                    # 고정 IP 명시 방식
+                    cmdline = f"console=serial0,115200 console=tty1 root=/dev/nfs nfsroot={self.config['server_ip']}:{target_nfs},vers=3 rw ip={target_ip}::{gateway}:{netmask}:{target_hostname}:{iface}:off rootwait elevator=deadline"
+                else:
+                    # IP가 없으면 DHCP 사용 (fallback)
+                    cmdline = f"console=serial0,115200 console=tty1 root=/dev/nfs nfsroot={self.config['server_ip']}:{target_nfs},vers=3 rw ip=dhcp rootwait"
+                
+                subprocess.run(['sudo', 'tee', cmdline_path], 
+                             input=cmdline.encode(), 
+                             stdout=subprocess.DEVNULL, check=True)
+                print(f"  ✓ Boot 파티션 복사 및 cmdline.txt 업데이트 완료 (IP: {target_ip if target_ip else 'DHCP'})")
+            
+            if copy_root:
+                print(f"\n{Colors.WARNING}Root 파티션 복사 중... (시간이 걸릴 수 있습니다){Colors.ENDC}")
+                # 기존 디렉토리 삭제 후 복사
+                subprocess.run(['sudo', 'rm', '-rf', target_nfs], stderr=subprocess.DEVNULL)
+                subprocess.run(['sudo', 'mkdir', '-p', target_nfs], check=True)
+                
+                # rsync로 복사 (하드링크 보존, 진행상황 표시)
+                subprocess.run([
+                    'sudo', 'rsync', '-aHAXx', '--info=progress2',
+                    f"{source_nfs}/", f"{target_nfs}/"
+                ], check=True)
+                
+                # fstab 수정 (최소 설정으로 단순화)
+                fstab_path = os.path.join(target_nfs, 'etc', 'fstab')
+                if os.path.exists(fstab_path):
+                    # 최소한의 fstab 설정만 유지 (working client 참조)
+                    minimal_fstab = """proc            /proc           proc    defaults          0       0
+tmpfs           /tmp            tmpfs   defaults,nosuid   0       0
+devpts          /dev/pts        devpts  gid=5,mode=620    0       0
+"""
+                    subprocess.run(['sudo', 'tee', fstab_path], 
+                                 input=minimal_fstab.encode(), 
+                                 stdout=subprocess.DEVNULL, check=True)
+                
+                # hostname 파일 수정
+                hostname_path = os.path.join(target_nfs, 'etc', 'hostname')
+                if os.path.exists(hostname_path):
+                    new_hostname = target_info.get('hostname', target_serial)  # 시리얼을 hostname으로
+                    subprocess.run(['sudo', 'tee', hostname_path], 
+                                 input=new_hostname.encode(), 
+                                 stdout=subprocess.DEVNULL, check=True)
+                    print(f"  hostname 설정: {new_hostname}")
+                
+                # /etc/hosts 파일도 수정
+                hosts_path = os.path.join(target_nfs, 'etc', 'hosts')
+                if os.path.exists(hosts_path):
+                    # 소스 호스트명과 raspberrypi를 새 hostname으로 변경
+                    source_hostname = source_info.get('hostname', source_serial)
+                    subprocess.run([
+                        'sudo', 'sed', '-i',
+                        f's/\\b{source_hostname}\\b/{new_hostname}/g',
+                        hosts_path
+                    ], check=True)
+                    subprocess.run([
+                        'sudo', 'sed', '-i',
+                        f's/\\braspberrypi\\b/{new_hostname}/g',
+                        hosts_path
+                    ], check=True)
+                    
+                    # 127.0.1.1 라인 재설정
+                    subprocess.run([
+                        'sudo', 'sed', '-i',
+                        f'/^127\\.0\\.1\\.1/d',  # 기존 127.0.1.1 라인 삭제
+                        hosts_path
+                    ], check=True)
+                    
+                    # 새로운 127.0.1.1 라인 추가
+                    hosts_line = f"127.0.1.1\t{new_hostname}\n"
+                    subprocess.run(['sudo', 'tee', '-a', hosts_path],
+                                 input=hosts_line.encode(),
+                                 stdout=subprocess.DEVNULL, check=True)
+                    print(f"  /etc/hosts 업데이트 완료")
+                
+                # 권한 설정 (모두에게 읽기/쓰기/실행 권한)
+                subprocess.run(['sudo', 'chmod', '-R', '777', target_nfs], check=True)
+                print(f"  ✓ NFS 디렉토리 권한 설정 완료 (777)")
+                
+                # 소유자 변경
+                current_user = os.environ.get('SUDO_USER', os.environ.get('USER', 'rpi-server'))
+                subprocess.run(['sudo', 'chown', '-R', f'{current_user}:{current_user}', target_nfs], 
+                             stderr=subprocess.DEVNULL, check=False)
+                print(f"  ✓ NFS 디렉토리 소유자 변경 완료 ({current_user})")
+                
+                print(f"  ✓ Root 파티션 복사 완료")
+            
+            print(f"\n{Colors.GREEN}✅ 템플릿 복사가 완료되었습니다!{Colors.ENDC}")
+            print(f"{Colors.GREEN}클라이언트 {target_serial}이 네트워크 부팅할 준비가 되었습니다.{Colors.ENDC}")
+            
+        except subprocess.CalledProcessError as e:
+            print(f"{Colors.FAIL}오류 발생: {e}{Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.FAIL}예기치 않은 오류: {e}{Colors.ENDC}")
+        
+        time.sleep(3)
+    
+    def server_settings(self):
+        """서버 설정"""
+        while True:
+            self.print_header()
+            print(f"{Colors.BOLD}서버 설정{Colors.ENDC}\n")
+            
+            print(f"{Colors.BOLD}현재 설정:{Colors.ENDC}")
+            print(f"  서버 IP: {self.config['server_ip']}")
+            print(f"  DHCP 범위: {self.config['dhcp_range_start']} - {self.config['dhcp_range_end']}")
+            print(f"  네트워크 인터페이스: {self.config['network_interface']}")
+            print(f"  NFS 루트: {self.config['nfs_root']}")
+            print(f"  TFTP 루트: {self.config['tftp_root']}")
+            print()
+            
+            # ProxyDHCP 모드 상태 표시
+            proxy_mode = self.config.get('proxy_dhcp_mode', False)
+            mode_status = f"{Colors.GREEN}활성화{Colors.ENDC}" if proxy_mode else f"{Colors.WARNING}비활성화{Colors.ENDC}"
+            print(f"  ProxyDHCP 모드: {mode_status}")
+            print()
+            
+            print(f"{Colors.BOLD}옵션:{Colors.ENDC}")
+            print(f"  {Colors.CYAN}1.{Colors.ENDC} 서버 IP 변경")
+            print(f"  {Colors.CYAN}2.{Colors.ENDC} DHCP 범위 변경")
+            print(f"  {Colors.CYAN}3.{Colors.ENDC} 네트워크 인터페이스 변경")
+            print(f"  {Colors.CYAN}4.{Colors.ENDC} NFS/TFTP 경로 변경")
+            print(f"  {Colors.CYAN}5.{Colors.ENDC} ProxyDHCP 모드 전환")
+            print(f"  {Colors.CYAN}6.{Colors.ENDC} DHCP 충돌 검사")
+            print(f"  {Colors.CYAN}0.{Colors.ENDC} 뒤로 가기")
+            print()
+            
+            choice = input(f"{Colors.CYAN}선택: {Colors.ENDC}")
+            
+            if choice == '1':
+                new_ip = input("새 서버 IP: ").strip()
+                if new_ip:
+                    self.config['server_ip'] = new_ip
+                    self.save_config()
+                    print(f"{Colors.GREEN}✅ 서버 IP가 변경되었습니다.{Colors.ENDC}")
+                    time.sleep(2)
+            elif choice == '2':
+                start = input("DHCP 시작 IP: ").strip()
+                end = input("DHCP 종료 IP: ").strip()
+                if start and end:
+                    self.config['dhcp_range_start'] = start
+                    self.config['dhcp_range_end'] = end
+                    self.save_config()
+                    print(f"{Colors.GREEN}✅ DHCP 범위가 변경되었습니다.{Colors.ENDC}")
+                    time.sleep(2)
+            elif choice == '3':
+                # 네트워크 인터페이스 선택
+                interfaces = self.get_network_interfaces()
+                if interfaces:
+                    print(f"\n{Colors.BOLD}사용 가능한 네트워크 인터페이스:{Colors.ENDC}")
+                    for i, (iface, ip) in enumerate(interfaces, 1):
+                        current = " (현재)" if iface == self.config['network_interface'] else ""
+                        print(f"  {Colors.CYAN}{i}.{Colors.ENDC} {iface:<15} IP: {ip}{current}")
+                    print(f"  {Colors.CYAN}0.{Colors.ENDC} 수동 입력")
+                    
+                    choice_iface = input("\n선택: ").strip()
+                    if choice_iface == '0':
+                        iface = input("인터페이스 이름: ").strip()
+                    else:
+                        try:
+                            idx = int(choice_iface) - 1
+                            if 0 <= idx < len(interfaces):
+                                iface = interfaces[idx][0]
+                            else:
+                                print(f"{Colors.FAIL}잘못된 선택{Colors.ENDC}")
+                                time.sleep(2)
+                                continue
+                        except:
+                            print(f"{Colors.FAIL}잘못된 입력{Colors.ENDC}")
+                            time.sleep(2)
+                            continue
+                    
+                    if iface:
+                        self.config['network_interface'] = iface
+                        self.save_config()
+                        print(f"{Colors.GREEN}✅ 네트워크 인터페이스가 {iface}로 변경되었습니다.{Colors.ENDC}")
+                        time.sleep(2)
+                else:
+                    iface = input("네트워크 인터페이스: ").strip()
+                    if iface:
+                        self.config['network_interface'] = iface
+                        self.save_config()
+                        print(f"{Colors.GREEN}✅ 네트워크 인터페이스가 변경되었습니다.{Colors.ENDC}")
+                        time.sleep(2)
+            elif choice == '4':
+                nfs = input(f"NFS 루트 경로 (현재: {self.config['nfs_root']}): ").strip()
+                tftp = input(f"TFTP 루트 경로 (현재: {self.config['tftp_root']}): ").strip()
+                if nfs:
+                    self.config['nfs_root'] = nfs
+                if tftp:
+                    self.config['tftp_root'] = tftp
+                self.save_config()
+                print(f"{Colors.GREEN}✅ 경로가 변경되었습니다.{Colors.ENDC}")
+                time.sleep(2)
+            elif choice == '5':
+                # ProxyDHCP 모드 전환
+                current_mode = self.config.get('proxy_dhcp_mode', False)
+                print(f"\n{Colors.BOLD}ProxyDHCP 모드 설정{Colors.ENDC}")
+                print(f"현재 상태: {'활성화' if current_mode else '비활성화'}")
+                print(f"\n{Colors.WARNING}ProxyDHCP 모드 설명:{Colors.ENDC}")
+                print("  - 활성화: 공유기와 함께 동작 (공유기가 IP 할당, PXE 서버는 부팅 정보만 제공)")
+                print("  - 비활성화: PXE 서버가 전체 DHCP 서비스 제공 (공유기 DHCP 비활성화 필요)")
+                
+                toggle = input(f"\n모드를 {'비활성화' if current_mode else '활성화'}하시겠습니까? (y/n): ").lower()
+                if toggle == 'y':
+                    self.config['proxy_dhcp_mode'] = not current_mode
+                    self.save_config()
+                    print(f"{Colors.GREEN}✅ ProxyDHCP 모드가 {'활성화' if not current_mode else '비활성화'}되었습니다.{Colors.ENDC}")
+                    print(f"{Colors.WARNING}변경사항을 적용하려면 dnsmasq 서비스를 재시작하세요.{Colors.ENDC}")
+                    time.sleep(3)
+            elif choice == '6':
+                # DHCP 충돌 검사
+                self.check_dhcp_conflicts()
+            elif choice == '0':
+                break
+    
+    def manage_services(self):
+        """서비스 관리"""
+        services = {
+            '1': ('dnsmasq', 'DHCP/TFTP 서버'),
+            '2': ('nfs-kernel-server', 'NFS 서버'),
+            '3': ('tftpd-hpa', 'TFTP 서버'),
+        }
+        
+        while True:
+            self.print_header()
+            print(f"{Colors.BOLD}서비스 관리{Colors.ENDC}\n")
+            
+            # 서비스 상태 표시
+            for key, (service, desc) in services.items():
+                result = subprocess.run(['systemctl', 'is-active', service], 
+                                      capture_output=True, text=True)
+                status = result.stdout.strip() == 'active'
+                icon = "✅" if status else "❌"
+                color = Colors.GREEN if status else Colors.FAIL
+                print(f"  {key}. {icon} {color}{desc:<20}{Colors.ENDC} ({service})")
+            print()
+            
+            print(f"{Colors.BOLD}작업:{Colors.ENDC}")
+            print(f"  {Colors.CYAN}s.{Colors.ENDC} 시작 (번호 입력)")
+            print(f"  {Colors.CYAN}t.{Colors.ENDC} 중지 (번호 입력)")
+            print(f"  {Colors.CYAN}r.{Colors.ENDC} 재시작 (번호 입력)")
+            print(f"  {Colors.CYAN}a.{Colors.ENDC} 모두 시작")
+            print(f"  {Colors.CYAN}0.{Colors.ENDC} 뒤로 가기")
+            print()
+            
+            choice = input(f"{Colors.CYAN}선택: {Colors.ENDC}").lower()
+            
+            if choice == '0':
+                break
+            elif choice == 'a':
+                for _, (service, _) in services.items():
+                    subprocess.run(['sudo', 'systemctl', 'start', service])
+                print(f"{Colors.GREEN}✅ 모든 서비스를 시작했습니다.{Colors.ENDC}")
+                time.sleep(2)
+            elif choice.startswith('s') or choice.startswith('t') or choice.startswith('r'):
+                action = {'s': 'start', 't': 'stop', 'r': 'restart'}[choice[0]]
+                num = input(f"서비스 번호: ")
+                if num in services:
+                    service, _ = services[num]
+                    subprocess.run(['sudo', 'systemctl', action, service])
+                    print(f"{Colors.GREEN}✅ {service} 서비스를 {action}했습니다.{Colors.ENDC}")
+                    time.sleep(2)
+    
+    def view_logs(self):
+        """로그 확인"""
+        self.print_header()
+        print(f"{Colors.BOLD}로그 확인{Colors.ENDC}\n")
+        
+        print(f"  {Colors.CYAN}1.{Colors.ENDC} dnsmasq 로그")
+        print(f"  {Colors.CYAN}2.{Colors.ENDC} NFS 로그")
+        print(f"  {Colors.CYAN}3.{Colors.ENDC} 시스템 로그")
+        print()
+        
+        choice = input(f"{Colors.CYAN}선택: {Colors.ENDC}")
+        
+        if choice == '1':
+            subprocess.run(['sudo', 'journalctl', '-u', 'dnsmasq', '-n', '50'])
+        elif choice == '2':
+            subprocess.run(['sudo', 'journalctl', '-u', 'nfs-kernel-server', '-n', '50'])
+        elif choice == '3':
+            subprocess.run(['sudo', 'journalctl', '-n', '50'])
+        
+        input(f"\n{Colors.CYAN}Enter를 눌러 계속...{Colors.ENDC}")
+    
+    def check_dhcp_conflicts(self):
+        """DHCP 충돌 검사"""
+        self.print_header()
+        print(f"{Colors.BOLD}DHCP 충돌 검사{Colors.ENDC}\n")
+        
+        print(f"{Colors.CYAN}네트워크에서 DHCP 서버를 검색 중...{Colors.ENDC}")
+        
+        # nmap을 사용한 DHCP 서버 검색 (가능한 경우)
+        try:
+            result = subprocess.run(
+                ['sudo', 'nmap', '--script', 'broadcast-dhcp-discover'],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            if result.returncode == 0:
+                print(f"\n{Colors.BOLD}검색 결과:{Colors.ENDC}")
+                print(result.stdout)
+                
+                # 여러 DHCP 서버가 발견된 경우 경고
+                if result.stdout.count('DHCP Offer') > 1:
+                    print(f"\n{Colors.FAIL}⚠️  경고: 네트워크에 여러 DHCP 서버가 감지되었습니다!{Colors.ENDC}")
+                    print(f"{Colors.WARNING}ProxyDHCP 모드를 사용하거나 하나의 DHCP 서버만 활성화하세요.{Colors.ENDC}")
+                else:
+                    print(f"\n{Colors.GREEN}✅ DHCP 충돌이 감지되지 않았습니다.{Colors.ENDC}")
+            else:
+                raise subprocess.CalledProcessError(result.returncode, 'nmap')
+                
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+            # nmap이 없거나 실패한 경우 대체 방법
+            print(f"\n{Colors.WARNING}nmap을 사용할 수 없습니다. 기본 검사를 수행합니다...{Colors.ENDC}")
+            
+            # ARP 테이블에서 게이트웨이 확인
+            try:
+                arp_result = subprocess.run(['arp', '-n'], capture_output=True, text=True)
+                gateway_ip = '.'.join(self.config['server_ip'].split('.')[:3]) + '.1'
+                
+                if gateway_ip in arp_result.stdout:
+                    print(f"\n{Colors.WARNING}⚠️  공유기/게이트웨이({gateway_ip})가 감지되었습니다.{Colors.ENDC}")
+                    print(f"공유기에 DHCP 서버가 활성화되어 있을 가능성이 높습니다.")
+                    print(f"\n{Colors.BOLD}해결 방법:{Colors.ENDC}")
+                    print(f"  1. ProxyDHCP 모드 사용 (권장)")
+                    print(f"  2. 공유기 DHCP 비활성화")
+                    print(f"  3. MAC 주소 기반 필터링 사용")
+                    
+                # 현재 dnsmasq 상태 확인
+                dnsmasq_status = subprocess.run(
+                    ['systemctl', 'is-active', 'dnsmasq'],
+                    capture_output=True, text=True
+                ).stdout.strip()
+                
+                print(f"\n{Colors.BOLD}PXE 서버 상태:{Colors.ENDC}")
+                print(f"  dnsmasq: {Colors.GREEN if dnsmasq_status == 'active' else Colors.FAIL}{dnsmasq_status}{Colors.ENDC}")
+                
+                if self.config.get('proxy_dhcp_mode', False):
+                    print(f"  모드: {Colors.GREEN}ProxyDHCP (충돌 방지){Colors.ENDC}")
+                else:
+                    print(f"  모드: {Colors.WARNING}일반 DHCP (충돌 가능){Colors.ENDC}")
+                    
+            except Exception as e:
+                print(f"{Colors.FAIL}검사 중 오류 발생: {e}{Colors.ENDC}")
+        
+        input(f"\n{Colors.CYAN}Enter를 눌러 계속...{Colors.ENDC}")
+    
+    def get_network_interfaces(self):
+        """사용 가능한 네트워크 인터페이스 목록 가져오기"""
+        interfaces = []
+        for iface in netifaces.interfaces():
+            if iface == 'lo':  # 루프백 제외
+                continue
+            addrs = netifaces.ifaddresses(iface)
+            if netifaces.AF_INET in addrs:  # IPv4 주소가 있는 인터페이스만
+                ip = addrs[netifaces.AF_INET][0]['addr']
+                interfaces.append((iface, ip))
+        return interfaces
+    
+    def apply_network_config(self):
+        """네트워크 설정 적용"""
+        print(f"\n{Colors.CYAN}네트워크 설정을 적용합니다...{Colors.ENDC}")
+        
+        # Ubuntu/Debian 구분
+        if Path('/etc/netplan').exists():
+            # Ubuntu (Netplan 사용)
+            self.apply_netplan_config()
+        elif Path('/etc/dhcpcd.conf').exists():
+            # Raspberry Pi OS / Debian (dhcpcd 사용)
+            self.apply_dhcpcd_config()
+        else:
+            print(f"{Colors.WARNING}네트워크 설정 방식을 자동으로 감지할 수 없습니다.{Colors.ENDC}")
+            print("수동으로 설정해주세요.")
+    
+    def apply_netplan_config(self):
+        """Netplan 설정 적용 (Ubuntu)"""
+        netplan_config = f"""network:
+  version: 2
+  ethernets:
+    {self.config['network_interface']}:
+      addresses:
+        - {self.config['server_ip']}/24
+      routes:
+        - to: default
+          via: {'.'.join(self.config['server_ip'].split('.')[:3])}.1
+      nameservers:
+        addresses: [8.8.8.8, 8.8.4.4]
+"""
+        
+        netplan_file = '/etc/netplan/99-pxe-server.yaml'
+        
+        try:
+            # 설정 파일 작성
+            temp_netplan = os.path.expanduser('~/netplan_config.yaml.tmp')
+            with open(temp_netplan, 'w') as f:
+                f.write(netplan_config)
+            
+            # sudo로 복사
+            subprocess.run(['sudo', 'cp', temp_netplan, netplan_file], check=True)
+            os.remove(temp_netplan)
+            
+            print(f"{Colors.GREEN}Netplan 설정 파일이 생성되었습니다: {netplan_file}{Colors.ENDC}")
+            print("설정을 적용합니다...")
+            
+            # netplan apply
+            result = subprocess.run(['sudo', 'netplan', 'apply'], 
+                                  capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print(f"{Colors.GREEN}✅ 네트워크 설정이 적용되었습니다!{Colors.ENDC}")
+                print(f"새 IP 주소: {self.config['server_ip']}")
+            else:
+                print(f"{Colors.FAIL}❌ 설정 적용 실패: {result.stderr}{Colors.ENDC}")
+                
+        except Exception as e:
+            print(f"{Colors.FAIL}❌ 오류 발생: {e}{Colors.ENDC}")
+    
+    def apply_dhcpcd_config(self):
+        """dhcpcd 설정 적용 (Debian/Raspberry Pi OS)"""
+        dhcpcd_config = f"""
+# PXE Server Configuration
+interface {self.config['network_interface']}
+static ip_address={self.config['server_ip']}/24
+static routers={'.'.join(self.config['server_ip'].split('.')[:3])}.1
+static domain_name_servers=8.8.8.8 8.8.4.4
+"""
+        
+        try:
+            # 기존 설정 백업
+            subprocess.run(['sudo', 'cp', '/etc/dhcpcd.conf', '/etc/dhcpcd.conf.backup'], 
+                         check=True)
+            
+            # 설정 추가
+            temp_dhcpcd = os.path.expanduser('~/dhcpcd_append.conf.tmp')
+            with open(temp_dhcpcd, 'w') as f:
+                f.write(dhcpcd_config)
+            
+            subprocess.run(['sudo', 'bash', '-c', 
+                          f'cat {temp_dhcpcd} >> /etc/dhcpcd.conf'], 
+                         check=True)
+            os.remove(temp_dhcpcd)
+            
+            print(f"{Colors.GREEN}dhcpcd 설정이 추가되었습니다.{Colors.ENDC}")
+            print("서비스를 재시작합니다...")
+            
+            # dhcpcd 재시작
+            subprocess.run(['sudo', 'systemctl', 'restart', 'dhcpcd'], check=True)
+            
+            print(f"{Colors.GREEN}✅ 네트워크 설정이 적용되었습니다!{Colors.ENDC}")
+            print(f"새 IP 주소: {self.config['server_ip']}")
+            
+        except Exception as e:
+            print(f"{Colors.FAIL}❌ 오류 발생: {e}{Colors.ENDC}")
+    
+    def generate_dnsmasq_config(self):
+        """dnsmasq 통합 설정 파일 자동 생성 - 단일 파일로 통합"""
+        network_base = '.'.join(self.config['server_ip'].split('.')[:3])
+        
+        # 통합된 dnsmasq 설정 생성
+        unified_conf = f"""# Unified dnsmasq configuration - RPI PXE Manager
+port=0
+
+# PXE Boot Configuration
+interface={self.config['network_interface']}
+bind-interfaces
+
+# DHCP Range for dynamic allocation (avoid fixed IPs)
+# Fixed IPs: 100-199 reserved for manual assignment (100 devices)
+# Dynamic range: 200-250 for DHCP
+dhcp-range={network_base}.200,{network_base}.250,255.255.255.0,1h
+
+# Set this server as authoritative DHCP
+dhcp-authoritative
+
+# Faster DHCP response (beat router)
+dhcp-rapid-commit
+
+# DHCP Options
+dhcp-option=3,{network_base}.1
+dhcp-option=6,8.8.8.8,8.8.4.4
+dhcp-option=66,{self.config['server_ip']}
+dhcp-option=150,{self.config['server_ip']}
+
+# Tag for all PXE clients
+dhcp-match=set:pxeclient,60,PXEClient*
+
+# Tag for Raspberry Pi
+dhcp-vendorclass=set:rpi,PXEClient:Arch:00000:UNDI:002001
+
+# PXE/TFTP - Respond to all PXE requests
+dhcp-boot=tag:pxeclient,bootcode.bin,rpi-server,{self.config['server_ip']}
+dhcp-boot=tag:rpi,bootcode.bin,rpi-server,{self.config['server_ip']}
+dhcp-boot=bootcode.bin,rpi-server,{self.config['server_ip']}
+
+# Enable TFTP
+enable-tftp
+tftp-root={self.config['tftp_root']}
+tftp-no-blocksize
+
+# PXE Service
+pxe-service=0,"Raspberry Pi Boot",bootcode.bin,{self.config['server_ip']}
+pxe-prompt="Booting Raspberry Pi",1
+
+# Logging
+log-dhcp
+log-queries
+
+# Client Configurations
+"""
+        
+        # 기존 클라이언트 설정 추가
+        for client in self.config.get('clients', []):
+            if client.get('mac') and client.get('ip'):
+                unified_conf += f"""# Client: {client['serial']}
+dhcp-host={client.get('mac', '')},{client.get('ip', '')},{client['serial']},infinite
+dhcp-boot=tag:{client.get('mac', '')},{client['serial']}/bootcode.bin,rpi-server,{self.config['server_ip']}
+
+"""
+        
+        try:
+            # /etc/dnsmasq.d 디렉토리 생성 (없는 경우)
+            subprocess.run(['sudo', 'mkdir', '-p', '/etc/dnsmasq.d'], 
+                         stderr=subprocess.DEVNULL, check=False)
+            
+            # 임시 파일에 작성 후 /etc/dnsmasq.conf로 복사
+            temp_conf_file = os.path.expanduser('~/dnsmasq.conf.tmp')
+            with open(temp_conf_file, 'w') as f:
+                f.write(unified_conf)
+            
+            # 기존 dnsmasq.conf 백업
+            subprocess.run(['sudo', 'cp', '/etc/dnsmasq.conf', '/etc/dnsmasq.conf.backup'], 
+                         stderr=subprocess.DEVNULL, check=False)
+            
+            # 새 설정 파일 복사
+            subprocess.run(['sudo', 'cp', temp_conf_file, '/etc/dnsmasq.conf'], 
+                         check=True)
+            
+            # 임시 파일 삭제
+            os.remove(temp_conf_file)
+            
+            # 기존 개별 설정 파일들 정리
+            subprocess.run(['sudo', 'bash', '-c', 'rm -f /etc/dnsmasq.d/client-*.conf'], 
+                         stderr=subprocess.DEVNULL)
+            subprocess.run(['sudo', 'bash', '-c', 'rm -f /etc/dnsmasq.d/pxe-*.conf'], 
+                         stderr=subprocess.DEVNULL)
+            
+            print(f"  ✓ dnsmasq 통합 설정 생성 완료")
+            
+            # dnsmasq 재시작
+            subprocess.run(['sudo', 'systemctl', 'restart', 'dnsmasq'], 
+                         stderr=subprocess.DEVNULL, check=False)
+            
+            print(f"  ✓ dnsmasq 서비스 재시작 완료")
+            
+        except Exception as e:
+            print(f"  ⚠️  설정 파일 생성 실패: {e}")
+            print(f"     수동으로 ~/dnsmasq.conf.tmp를 /etc/dnsmasq.conf로 복사하세요")
+    
+    def initial_setup_wizard(self):
+        """초기 설정 마법사 - 원클릭 자동 설정"""
+        self.print_header()
+        print(f"{Colors.BOLD}{Colors.GREEN}🚀 원클릭 PXE 부팅 설정 마법사{Colors.ENDC}\n")
+        print(f"{Colors.CYAN}모든 설정을 자동으로 구성합니다!{Colors.ENDC}\n")
+        
+        confirm = input("자동 설정을 시작하시겠습니까? (Y/n): ").lower()
+        if confirm == 'n':
+            return
+        
+        print(f"\n{Colors.CYAN}🔍 네트워크 환경 자동 감지 중...{Colors.ENDC}")
+        
+        # 네트워크 인터페이스 자동 감지 및 설정
+        interfaces = self.get_network_interfaces()
+        if interfaces:
+            # 유선 인터페이스 우선 선택 (enp로 시작하는 것)
+            selected_iface = None
+            for iface, ip in interfaces:
+                if iface.startswith('enp') or iface.startswith('eth'):
+                    selected_iface = (iface, ip)
+                    break
+            
+            if not selected_iface:
+                selected_iface = interfaces[0]
+            
+            self.config['network_interface'] = selected_iface[0]
+            detected_ip = selected_iface[1]
+            print(f"  ✓ 인터페이스: {selected_iface[0]} (IP: {detected_ip})")
+            
+            # IP 대역 자동 설정 - 서버는 항상 .10 사용
+            ip_parts = detected_ip.split('.')
+            network_base = '.'.join(ip_parts[:3])
+            
+            # 서버 IP를 .10으로 고정 (공유기와 충돌 방지)
+            self.config['server_ip'] = f"{network_base}.10"
+            # 클라이언트만 사용할 고정 IP 범위 (동적 할당 없음)
+            self.config['dhcp_range_start'] = ""  # 동적 DHCP 사용 안 함
+            self.config['dhcp_range_end'] = ""  # 동적 DHCP 사용 안 함
+            print(f"  ✓ 서버 IP: {self.config['server_ip']}")
+            print(f"  ✓ DHCP 범위: 고정 IP만 사용 (100-199 범위)")
+        else:
+            print(f"{Colors.WARNING}  ! 네트워크 인터페이스를 찾을 수 없습니다.{Colors.ENDC}")
+            self.config['network_interface'] = 'enp0s31f6'  # 기본값
+            self.config['server_ip'] = '192.168.0.10'
+            network_base = '192.168.0'  # 기본값 설정
+        
+        # Netplan 설정 (고정 IP)
+        print(f"\n{Colors.CYAN}🔧 서버 네트워크 고정 IP 설정...{Colors.ENDC}")
+        gateway_ip = f"{network_base}.1"
+        
+        netplan_config = f"""# Let NetworkManager manage all devices on this system
+network:
+  version: 2
+  renderer: NetworkManager
+  ethernets:
+    {self.config['network_interface']}:
+      dhcp4: no
+      dhcp6: no
+      addresses:
+      - {self.config['server_ip']}/24
+      gateway4: {gateway_ip}
+      nameservers:
+        addresses: [8.8.8.8, 1.1.1.1]
+"""
+        
+        # Netplan 설정 파일 작성
+        try:
+            temp_netplan_file = os.path.expanduser('~/01-network-manager-all.yaml.tmp')
+            with open(temp_netplan_file, 'w') as f:
+                f.write(netplan_config)
+            
+            # 백업 생성
+            subprocess.run(['sudo', 'cp', '/etc/netplan/01-network-manager-all.yaml', 
+                          '/etc/netplan/01-network-manager-all.yaml.backup'], 
+                          stderr=subprocess.DEVNULL)
+            
+            # 새 설정 적용
+            subprocess.run(['sudo', 'cp', temp_netplan_file, 
+                          '/etc/netplan/01-network-manager-all.yaml'], check=True)
+            
+            # 임시 파일 삭제
+            os.remove(temp_netplan_file)
+            
+            print(f"  ✓ Netplan 설정 완료")
+            print(f"    - 인터페이스: {self.config['network_interface']}")
+            print(f"    - 고정 IP: {self.config['server_ip']}")
+            print(f"    - 게이트웨이: {gateway_ip}")
+            
+            # Netplan 적용 옵션
+            apply_now = input(f"\n  {Colors.YELLOW}지금 네트워크 설정을 적용하시겠습니까? (y/N): {Colors.ENDC}").lower()
+            if apply_now == 'y':
+                print(f"  {Colors.WARNING}네트워크가 잠시 끊길 수 있습니다...{Colors.ENDC}")
+                subprocess.run(['sudo', 'netplan', 'apply'], check=True)
+                print(f"  ✓ 네트워크 설정 적용 완료")
+            else:
+                print(f"  ℹ️  나중에 수동으로 적용하려면: {Colors.YELLOW}sudo netplan apply{Colors.ENDC}")
+            
+        except Exception as e:
+            print(f"  ⚠️  Netplan 설정 실패: {e}")
+            print(f"  수동으로 /etc/netplan/01-network-manager-all.yaml 파일을 수정하세요.")
+        
+        
+        # DHCP 충돌 자동 검사 및 해결
+        print(f"\n{Colors.CYAN}🔍 DHCP 충돌 검사 중...{Colors.ENDC}")
+        network_base = '.'.join(self.config['server_ip'].split('.')[:3])
+        gateway_ip = f"{network_base}.1"
+        
+        # 공유기 존재 확인 (ping으로 더 확실하게)
+        try:
+            ping_result = subprocess.run(['ping', '-c', '1', '-W', '1', gateway_ip], 
+                                       capture_output=True, text=True)
+            if ping_result.returncode == 0:
+                print(f"  ✓ 공유기({gateway_ip}) 감지됨")
+                print(f"  ✓ 일반 DHCP 모드 사용 (고정 IP 할당)")
+                self.config['proxy_dhcp_mode'] = False
+                # 공유기가 있어도 우리가 특정 MAC에만 응답하도록 설정
+            else:
+                print(f"  ⚠️  공유기 없음 - 독립 DHCP 서버로 동작")
+                self.config['proxy_dhcp_mode'] = False
+        except:
+            self.config['proxy_dhcp_mode'] = False
+        
+        # 디렉토리 생성 및 권한 설정
+        print(f"\n{Colors.CYAN}📁 디렉토리 생성 및 권한 설정...{Colors.ENDC}")
+        
+        # NFS 및 TFTP 디렉토리 생성
+        self.config['nfs_root'] = '/media/rpi-client'
+        self.config['tftp_root'] = '/tftpboot'
+        
+        for path in [self.config['nfs_root'], self.config['tftp_root']]:
+            if not os.path.exists(path):
+                try:
+                    subprocess.run(['sudo', 'mkdir', '-p', path], check=True)
+                    print(f"  ✓ {path} 디렉토리 생성됨")
+                except:
+                    print(f"  ⚠️  {path} 생성 실패 (권한 필요)")
+        
+        # /media/rpi-client 권한 설정 (모두에게 읽기/쓰기/실행 권한)
+        try:
+            subprocess.run(['sudo', 'chmod', '777', self.config['nfs_root']], check=True)
+            print(f"  ✓ {self.config['nfs_root']} 권한 설정 완료 (777)")
+            
+            # 소유자도 변경 (선택적)
+            current_user = os.environ.get('SUDO_USER', os.environ.get('USER', 'rpi-server'))
+            subprocess.run(['sudo', 'chown', f'{current_user}:{current_user}', self.config['nfs_root']], 
+                         stderr=subprocess.DEVNULL, check=False)
+            print(f"  ✓ {self.config['nfs_root']} 소유자 변경 완료 ({current_user})")
+        except Exception as e:
+            print(f"  ⚠️  권한 설정 실패: {e}")
+        
+        # /tftpboot 권한 설정
+        try:
+            subprocess.run(['sudo', 'chmod', '755', self.config['tftp_root']], check=True)
+            print(f"  ✓ {self.config['tftp_root']} 권한 설정 완료 (755)")
+        except:
+            pass
+        
+        # 서비스 충돌 자동 해결
+        print(f"\n{Colors.CYAN}🔧 서비스 충돌 자동 해결 중...{Colors.ENDC}")
+        
+        # tftpd-hpa 중지 (dnsmasq가 TFTP 제공)
+        try:
+            subprocess.run(['sudo', 'systemctl', 'stop', 'tftpd-hpa'], 
+                         stderr=subprocess.DEVNULL, check=False)
+            subprocess.run(['sudo', 'systemctl', 'disable', 'tftpd-hpa'], 
+                         stderr=subprocess.DEVNULL, check=False)
+            print(f"  ✓ tftpd-hpa 서비스 비활성화 (dnsmasq 통합 사용)")
+        except:
+            pass
+        
+        # 설정 저장
+        self.save_config()
+        
+        # dnsmasq 설정 자동 생성
+        print(f"\n{Colors.CYAN}📝 PXE 부팅 설정 생성 중...{Colors.ENDC}")
+        self.generate_dnsmasq_config()
+        
+        # 서비스 자동 시작
+        print(f"\n{Colors.CYAN}🚀 서비스 자동 시작 중...{Colors.ENDC}")
+        services = ['nfs-kernel-server', 'dnsmasq']
+        for service in services:
+            try:
+                subprocess.run(['sudo', 'systemctl', 'restart', service], 
+                             stderr=subprocess.DEVNULL, check=False)
+                
+                # 상태 확인
+                result = subprocess.run(['systemctl', 'is-active', service], 
+                                      capture_output=True, text=True)
+                if result.stdout.strip() == 'active':
+                    print(f"  ✓ {service} 시작됨")
+                else:
+                    print(f"  ⚠️  {service} 시작 실패 (수동 시작 필요)")
+            except:
+                print(f"  ⚠️  {service} 시작 실패 (sudo 권한 필요)")
+        
+        print(f"\n{Colors.GREEN}{'='*50}{Colors.ENDC}")
+        print(f"{Colors.GREEN}✅ 원클릭 설정 완료!{Colors.ENDC}")
+        print(f"{Colors.GREEN}{'='*50}{Colors.ENDC}")
+        print(f"\n{Colors.BOLD}현재 설정:{Colors.ENDC}")
+        print(f"  서버 IP: {self.config['server_ip']}")
+        print(f"  DHCP 범위: {self.config['dhcp_range_start']} - {self.config['dhcp_range_end']}")
+        print(f"  ProxyDHCP: {'활성화' if self.config.get('proxy_dhcp_mode', False) else '비활성화'}")
+        print(f"\n{Colors.BOLD}다음 단계:{Colors.ENDC}")
+        print(f"  1. 클라이언트 관리 → 새 클라이언트 추가")
+        print(f"  2. SD 카드에서 시스템 복사")
+        print(f"  3. 라즈베리파이 PXE 부팅!")
+        
+        print(f"\n{Colors.WARNING}문제 발생 시:{Colors.ENDC}")
+        print(f"  - 서버 설정 → DHCP 충돌 검사")
+        print(f"  - 서비스 관리 → dnsmasq 재시작")
+        
+        # 수동으로 서비스 시작 명령어 제공
+        print(f"\n{Colors.CYAN}수동 서비스 시작 명령어:{Colors.ENDC}")
+        print(f"  sudo systemctl restart dnsmasq")
+        print(f"  sudo systemctl restart nfs-kernel-server")
+        
+        input(f"\n{Colors.CYAN}Enter를 눌러 계속...{Colors.ENDC}")
+    
+    def run(self):
+        """메인 루프"""
+        try:
+            while self.running:
+                self.print_header()
+                self.print_menu()
+                
+                choice = input(f"{Colors.CYAN}선택: {Colors.ENDC}")
+                
+                if choice == '1':
+                    self.show_system_status()
+                elif choice == '2':
+                    self.manage_clients()
+                elif choice == '3':
+                    self.server_settings()
+                elif choice == '4':
+                    self.manage_services()
+                elif choice == '5':
+                    self.view_logs()
+                elif choice == '6':
+                    self.initial_setup_wizard()
+                elif choice == '0':
+                    self.running = False
+                    print(f"\n{Colors.GREEN}프로그램을 종료합니다. 안녕히 가세요!{Colors.ENDC}")
+                else:
+                    print(f"{Colors.WARNING}잘못된 선택입니다.{Colors.ENDC}")
+                    time.sleep(1)
+        except KeyboardInterrupt:
+            print(f"\n\n{Colors.WARNING}프로그램이 중단되었습니다.{Colors.ENDC}")
+            sys.exit(0)
+
+def main():
+    # Root 권한 확인
+    if os.geteuid() != 0:
+        print(f"{Colors.WARNING}이 프로그램은 root 권한이 필요합니다.{Colors.ENDC}")
+        print(f"다시 실행합니다...")
+        os.execvp('sudo', ['sudo', sys.executable] + sys.argv)
+    
+    manager = RPIPXEManager()
+    manager.run()
+
+if __name__ == "__main__":
+    main()
