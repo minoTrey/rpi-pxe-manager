@@ -427,6 +427,19 @@ devpts          /dev/pts        devpts  gid=5,mode=620    0       0
                                  input=hostname.encode(), 
                                  stdout=subprocess.DEVNULL, check=True)
                 
+                # sudo 바이너리 권한 수정 (NFS 부팅 시 필요)
+                sudo_bin_path = target_nfs / 'usr' / 'bin' / 'sudo'
+                if sudo_bin_path.exists():
+                    print(f"  sudo 권한 설정 중...")
+                    subprocess.run(['sudo', 'chown', 'root:root', str(sudo_bin_path)], check=True)
+                    subprocess.run(['sudo', 'chmod', '4755', str(sudo_bin_path)], check=True)
+                
+                # sudo.conf 권한 수정
+                sudo_conf_path = target_nfs / 'etc' / 'sudo.conf'
+                if sudo_conf_path.exists():
+                    subprocess.run(['sudo', 'chown', 'root:root', str(sudo_conf_path)], check=True)
+                    subprocess.run(['sudo', 'chmod', '644', str(sudo_conf_path)], check=True)
+                
                 # hosts 파일 수정
                 hosts_path = target_nfs / 'etc' / 'hosts'
                 if hosts_path.exists():
