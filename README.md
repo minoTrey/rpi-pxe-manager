@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.1-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-yellow.svg)
 ![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi-red.svg)
@@ -104,7 +104,7 @@ netifaces        # 네트워크 인터페이스 관리
 
 ```bash
 # 저장소 클론
-git clone https://github.com/yourusername/rpi-pxe-manager.git
+git clone https://github.com/minoTrey/rpi-pxe-manager.git
 cd rpi-pxe-manager
 
 # 실행 권한 부여
@@ -338,6 +338,32 @@ ip link show
 3. 서버 설정 → 1. 네트워크 인터페이스 변경
 ```
 
+#### 4. "sudo: /usr/lib/sudo/sudoers.so must be owned by uid 0"
+
+**원인:** NFS 파일시스템에서 sudo 바이너리 및 플러그인 권한 문제
+
+**해결:** 
+```bash
+# pxe 프로그램이 자동으로 처리하지만, 수동 수정이 필요한 경우:
+sudo chown root:root /media/rpi-client/{serial}/usr/bin/sudo
+sudo chmod 4755 /media/rpi-client/{serial}/usr/bin/sudo
+sudo chown -R root:root /media/rpi-client/{serial}/usr/lib/sudo
+sudo chmod 755 /media/rpi-client/{serial}/usr/lib/sudo/sudoers.so
+```
+
+#### 5. "dnsmasq 서비스가 계속 중지됨"
+
+**원인:** dnsmasq.conf 파일의 문법 오류 (특히 dhcp-option=252 설정)
+
+**해결:**
+```bash
+# 설정 파일 문법 검사
+sudo dnsmasq --test
+
+# 문제가 있는 라인 확인 및 제거
+sudo nano /etc/dnsmasq.conf
+```
+
 ### 📋 진단 명령어
 
 ```bash
@@ -461,6 +487,7 @@ rw ip=dhcp rootwait
 
 | 포트 | 프로토콜 | 서비스 | 설명 |
 |------|----------|--------|------|
+| 22 | TCP | SSH | 원격 접속 |
 | 67 | UDP | DHCP | IP 주소 할당 |
 | 69 | UDP | TFTP | 부트 파일 전송 |
 | 111 | TCP/UDP | RPC | NFS 지원 |
