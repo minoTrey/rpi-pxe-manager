@@ -427,10 +427,12 @@ devpts          /dev/pts        devpts  gid=5,mode=620    0       0
                                  input=hostname.encode(), 
                                  stdout=subprocess.DEVNULL, check=True)
                 
-                # sudo 바이너리 권한 수정 (NFS 부팅 시 필요)
+                # sudo 권한 수정 (NFS 부팅 시 필요)
+                print(f"  sudo 권한 설정 중...")
+                
+                # sudo 바이너리 권한 수정
                 sudo_bin_path = target_nfs / 'usr' / 'bin' / 'sudo'
                 if sudo_bin_path.exists():
-                    print(f"  sudo 권한 설정 중...")
                     subprocess.run(['sudo', 'chown', 'root:root', str(sudo_bin_path)], check=True)
                     subprocess.run(['sudo', 'chmod', '4755', str(sudo_bin_path)], check=True)
                 
@@ -439,6 +441,43 @@ devpts          /dev/pts        devpts  gid=5,mode=620    0       0
                 if sudo_conf_path.exists():
                     subprocess.run(['sudo', 'chown', 'root:root', str(sudo_conf_path)], check=True)
                     subprocess.run(['sudo', 'chmod', '644', str(sudo_conf_path)], check=True)
+                
+                # sudo 플러그인 디렉토리 권한 수정
+                sudo_lib_path = target_nfs / 'usr' / 'lib' / 'sudo'
+                if sudo_lib_path.exists():
+                    subprocess.run(['sudo', 'chown', '-R', 'root:root', str(sudo_lib_path)], check=True)
+                    subprocess.run(['sudo', 'chmod', '755', str(sudo_lib_path)], check=True)
+                    
+                    # sudoers.so 실행 권한
+                    sudoers_so = sudo_lib_path / 'sudoers.so'
+                    if sudoers_so.exists():
+                        subprocess.run(['sudo', 'chmod', '755', str(sudoers_so)], check=True)
+                    
+                    # libsudo_util.so* 파일들 실행 권한
+                    for lib_file in sudo_lib_path.glob('libsudo_util.so*'):
+                        subprocess.run(['sudo', 'chmod', '755', str(lib_file)], check=True)
+                    
+                    # 나머지 .so 파일들
+                    for so_file in sudo_lib_path.glob('*.so'):
+                        if so_file.name not in ['sudoers.so'] and not so_file.name.startswith('libsudo_util'):
+                            subprocess.run(['sudo', 'chmod', '644', str(so_file)], check=True)
+                
+                # /etc/sudoers 파일 권한
+                sudoers_path = target_nfs / 'etc' / 'sudoers'
+                if sudoers_path.exists():
+                    subprocess.run(['sudo', 'chown', 'root:root', str(sudoers_path)], check=True)
+                    subprocess.run(['sudo', 'chmod', '440', str(sudoers_path)], check=True)
+                
+                # /etc/sudoers.d 디렉토리 권한
+                sudoers_d_path = target_nfs / 'etc' / 'sudoers.d'
+                if sudoers_d_path.exists():
+                    subprocess.run(['sudo', 'chown', 'root:root', str(sudoers_d_path)], check=True)
+                    subprocess.run(['sudo', 'chmod', '755', str(sudoers_d_path)], check=True)
+                    # sudoers.d 내부 파일들
+                    for sudoers_file in sudoers_d_path.glob('*'):
+                        if sudoers_file.is_file():
+                            subprocess.run(['sudo', 'chown', 'root:root', str(sudoers_file)], check=True)
+                            subprocess.run(['sudo', 'chmod', '440', str(sudoers_file)], check=True)
                 
                 # hosts 파일 수정
                 hosts_path = target_nfs / 'etc' / 'hosts'
