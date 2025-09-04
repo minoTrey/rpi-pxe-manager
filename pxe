@@ -479,6 +479,29 @@ devpts          /dev/pts        devpts  gid=5,mode=620    0       0
                             subprocess.run(['sudo', 'chown', 'root:root', str(sudoers_file)], check=True)
                             subprocess.run(['sudo', 'chmod', '440', str(sudoers_file)], check=True)
                 
+                # SSH 서비스 자동 활성화
+                print(f"  SSH 서비스 활성화 중...")
+                ssh_service_link = target_nfs / 'etc' / 'systemd' / 'system' / 'multi-user.target.wants' / 'ssh.service'
+                if not ssh_service_link.exists():
+                    subprocess.run(['sudo', 'mkdir', '-p', str(ssh_service_link.parent)], check=True)
+                    subprocess.run(['sudo', 'ln', '-sf', '/lib/systemd/system/ssh.service', str(ssh_service_link)], check=True)
+                
+                # SSH 호스트 키 생성 (없는 경우)
+                ssh_dir = target_nfs / 'etc' / 'ssh'
+                if ssh_dir.exists():
+                    for key_type, key_file in [('rsa', 'ssh_host_rsa_key'), 
+                                               ('ecdsa', 'ssh_host_ecdsa_key'),
+                                               ('ed25519', 'ssh_host_ed25519_key')]:
+                        key_path = ssh_dir / key_file
+                        if not key_path.exists():
+                            subprocess.run(['sudo', 'ssh-keygen', '-t', key_type, '-f', str(key_path), '-N', '', '-q'], check=True)
+                    
+                    # SSH 설정 파일 수정 (비밀번호 인증 허용)
+                    sshd_config = ssh_dir / 'sshd_config'
+                    if sshd_config.exists():
+                        subprocess.run(['sudo', 'sed', '-i', 's/^#PasswordAuthentication.*/PasswordAuthentication yes/', str(sshd_config)], check=True)
+                        subprocess.run(['sudo', 'sed', '-i', 's/^PasswordAuthentication no/PasswordAuthentication yes/', str(sshd_config)], check=True)
+                
                 # hosts 파일 수정
                 hosts_path = target_nfs / 'etc' / 'hosts'
                 if hosts_path.exists():
