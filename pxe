@@ -74,8 +74,12 @@ class RPIPXEManager:
     
     def save_config(self):
         """설정 파일 저장"""
-        with open(self.config_file, 'w') as f:
-            json.dump(self.config, f, indent=2)
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(self.config, f, indent=2)
+            print(f"{Colors.GREEN}  ✓ 설정 파일 저장됨: {self.config_file} (클라이언트 수: {len(self.config.get('clients', []))}개){Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.FAIL}  ✗ 설정 파일 저장 실패: {e}{Colors.ENDC}")
     
     def clear_screen(self):
         """화면 지우기"""
