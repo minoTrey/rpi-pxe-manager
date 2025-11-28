@@ -1912,7 +1912,7 @@ dhcp-host={mac},{ip},{hostname},infinite
         nfs_path = Path(self.config['nfs_root']) / serial
 
         # cmdline.txt
-        cmdline = f"console=serial0,115200 console=tty1 root=/dev/nfs nfsroot={self.config['server_ip']}:{nfs_path},vers=3 rw ip={ip}:::{self.config['server_ip'].rsplit('.', 1)[0]}.255:255.255.255.0:{hostname}:eth0:off elevator=deadline rootwait"
+        cmdline = f"console=serial0,115200 console=tty1 root=/dev/nfs nfsroot={self.config['server_ip']}:{nfs_path},vers=3 rw ip={ip}:{self.config['server_ip']}:192.168.0.1:255.255.255.0:{hostname}:eth0:off elevator=deadline rootwait"
 
         temp_cmdline = '/tmp/cmdline.txt'
         with open(temp_cmdline, 'w') as f:
