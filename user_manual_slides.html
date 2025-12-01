@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPI PXE Manager - 사용자 매뉴얼</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            overflow: hidden;
+        }
+
+        .slide-container {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .slide {
+            width: 100%;
+            height: 100%;
+            display: none;
+            padding: 60px 80px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            position: absolute;
+            top: 0;
+            left: 0;
+            overflow-y: auto;
+        }
+
+        .slide.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .slide-title {
+            font-size: 2.8em;
+            color: #00d4ff;
+            margin-bottom: 40px;
+            border-bottom: 3px solid #00d4ff;
+            padding-bottom: 20px;
+        }
+
+        .slide-subtitle {
+            font-size: 1.8em;
+            color: #ffd700;
+            margin: 30px 0 20px 0;
+        }
+
+        .slide-content {
+            flex: 1;
+            font-size: 1.3em;
+            line-height: 1.8;
+        }
+
+        .slide-content ul {
+            margin-left: 40px;
+        }
+
+        .slide-content li {
+            margin: 15px 0;
+        }
+
+        .highlight {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+
+        .warning {
+            color: #ff6b6b;
+        }
+
+        .success {
+            color: #51cf66;
+        }
+
+        .code-block {
+            background: #0f0f23;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            color: #51cf66;
+        }
+
+        .diagram {
+            background: #0f0f23;
+            border: 2px solid #00d4ff;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 30px 0;
+            font-family: 'Consolas', monospace;
+            white-space: pre;
+            line-height: 1.6;
+            font-size: 1em;
+            overflow-x: auto;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 20px;
+        }
+
+        .three-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .card {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid #00d4ff;
+            border-radius: 15px;
+            padding: 25px;
+        }
+
+        .card-title {
+            font-size: 1.4em;
+            color: #ffd700;
+            margin-bottom: 15px;
+        }
+
+        .card ul {
+            margin-left: 20px;
+        }
+
+        .navigation {
+            position: fixed;
+            bottom: 30px;
+            right: 40px;
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .nav-btn {
+            background: #00d4ff;
+            color: #1a1a2e;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .nav-btn:hover {
+            background: #ffd700;
+            transform: scale(1.05);
+        }
+
+        .nav-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .slide-counter {
+            position: fixed;
+            bottom: 30px;
+            left: 40px;
+            font-size: 1.2em;
+            color: #888;
+        }
+
+        .title-slide {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .title-slide .main-title {
+            font-size: 4em;
+            color: #00d4ff;
+            margin-bottom: 30px;
+            text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+        }
+
+        .title-slide .main-subtitle {
+            font-size: 2em;
+            color: #ffd700;
+            margin-bottom: 50px;
+        }
+
+        .title-slide .version {
+            font-size: 1.5em;
+            color: #888;
+        }
+
+        .network-diagram {
+            font-size: 0.85em;
+            line-height: 1.4;
+        }
+
+        .table-container {
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 1em;
+        }
+
+        th, td {
+            border: 1px solid #00d4ff;
+            padding: 15px 20px;
+            text-align: left;
+        }
+
+        th {
+            background: rgba(0, 212, 255, 0.2);
+            color: #00d4ff;
+        }
+
+        tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .step-list {
+            counter-reset: step;
+            list-style: none;
+            margin-left: 0 !important;
+        }
+
+        .step-list li {
+            counter-increment: step;
+            padding-left: 50px;
+            position: relative;
+        }
+
+        .step-list li::before {
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 35px;
+            height: 35px;
+            background: #00d4ff;
+            color: #1a1a2e;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .icon {
+            font-size: 1.2em;
+            margin-right: 10px;
+        }
+
+        .small-text {
+            font-size: 0.85em;
+            color: #aaa;
+        }
+
+        @media print {
+            .slide {
+                page-break-after: always;
+                display: block !important;
+                position: relative;
+                height: auto;
+                min-height: 100vh;
+            }
+            .navigation, .slide-counter {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="slide-container">
+
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" id="slide-1">
+            <div class="main-title">🚀 RPI PXE Manager</div>
+            <div class="main-subtitle">Raspberry Pi 네트워크 부팅 시스템<br>사용자 매뉴얼</div>
+            <div class="version">Version 2.4.0 | 2025.11</div>
+            <div style="margin-top: 50px; color: #888;">
+                <p>SD 카드 없이 다수의 Raspberry Pi를 중앙 관리하는 PXE 부팅 시스템</p>
+            </div>
+        </div>
+
+        <!-- Slide 2: Table of Contents -->
+        <div class="slide" id="slide-2">
+            <h1 class="slide-title">📑 목차</h1>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="card">
+                        <div class="card-title">Part 1: 시스템 개요</div>
+                        <ul>
+                            <li>시스템 소개 및 특징</li>
+                            <li>전체 네트워크 구조</li>
+                            <li>물리적 네트워크 토폴로지</li>
+                            <li>핵심 구성요소</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Part 2: 네트워크 구성</div>
+                        <ul>
+                            <li>IP 주소 체계</li>
+                            <li>스위치 구성</li>
+                            <li>서비스 포트 및 프로토콜</li>
+                            <li>Windows PC 연결 구성</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Part 3: 프로그램 실행</div>
+                        <ul>
+                            <li>CLI 인터페이스 사용법</li>
+                            <li>GUI 인터페이스 사용법</li>
+                            <li>초기 설정 마법사</li>
+                            <li>클라이언트 추가/관리</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Part 4: 운영 가이드</div>
+                        <ul>
+                            <li>서비스 관리</li>
+                            <li>문제 해결</li>
+                            <li>도움말 스크립트</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: System Overview -->
+        <div class="slide" id="slide-3">
+            <h1 class="slide-title">🎯 시스템 개요</h1>
+            <div class="slide-content">
+                <h2 class="slide-subtitle">RPI PXE Manager란?</h2>
+                <p>SD 카드 없이 <span class="highlight">다수의 Raspberry Pi</span>를 네트워크를 통해 부팅하고 중앙에서 관리하는 시스템입니다.</p>
+
+                <div class="two-column" style="margin-top: 40px;">
+                    <div class="card">
+                        <div class="card-title">✨ 주요 특징</div>
+                        <ul>
+                            <li><span class="success">SD 카드 불필요</span> - 네트워크 부팅</li>
+                            <li><span class="success">중앙 집중 관리</span> - 서버에서 모든 RPi 제어</li>
+                            <li><span class="success">자동 구성</span> - 클라이언트 추가 시 자동 설정</li>
+                            <li><span class="success">실시간 모니터링</span> - 온라인 상태 확인</li>
+                            <li><span class="success">시스템 복제</span> - 기존 클라이언트에서 자동 복사</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">🔧 핵심 서비스</div>
+                        <ul>
+                            <li><span class="highlight">dnsmasq</span> - DHCP/DNS/TFTP/PXE 서버</li>
+                            <li><span class="highlight">NFS Server</span> - 루트 파일시스템 공유</li>
+                            <li><span class="highlight">TFTP</span> - 부트 파일 전송</li>
+                        </ul>
+                        <div style="margin-top: 20px;">
+                            <p class="small-text">지원 RPi 모델: 3B+, 4B, 5</p>
+                            <p class="small-text">서버 OS: Ubuntu 20.04+ / Debian 10+</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Full Network Architecture -->
+        <div class="slide" id="slide-4">
+            <h1 class="slide-title">🌐 전체 네트워크 구조</h1>
+            <div class="slide-content">
+                <div class="diagram network-diagram">
+                                        ☁️ Internet
+                                            │
+                                    ┌───────┴───────┐
+                                    │   🌐 공유기    │ ← 인터넷 연결 (WAN)
+                                    │ (192.168.0.1) │
+                                    └───────┬───────┘
+                                            │ LAN
+                    ┌───────────────────────┼───────────────────────┐
+                    │                       │                       │
+            ┌───────┴───────┐       ┌───────┴───────┐       ┌───────┴───────┐
+            │  📡 WiFi AP   │       │  🔀 메인 스위치 │       │ 🖥️ Windows PC │
+            │ (내장/외장)   │       │ (Layer 2/3)   │       │  (캡처 시스템) │
+            └───────┬───────┘       └───────┬───────┘       └───────────────┘
+                    │                       │                 현재: WiFi 연결
+            ┌───────┴───────┐               │                 추후: 이더넷 연결
+            │ 🖥️ Windows PC │               │
+            │  (현재 WiFi)  │       ┌───────┴───────┐
+            └───────────────┘       │               │
+                                    ▼               ▼
+                            ┌───────────┐   ┌───────────┐
+                            │ 🔀 스위치1 │   │ 🔀 스위치2 │  ... (확장 가능)
+                            │  (7 ports)│   │  (7 ports)│
+                            └─────┬─────┘   └─────┬─────┘
+                    ┌──┬──┬──┬──┬─┴─┬──┐   ┌──┬──┬─┴─┬──┬──┬──┐
+                    │  │  │  │  │   │  │   │  │  │   │  │  │  │
+                   🍓🍓🍓🍓🍓 🍓🍓  🍓🍓🍓 🍓🍓🍓🍓
+                   RPi 1-7           RPi 8-14
+
+            ┌────────────────────────────────────────────────────────────────┐
+            │  💻 PXE Server (192.168.0.10)                                  │
+            │  ├─ dnsmasq: DHCP/DNS/TFTP/PXE                                │
+            │  ├─ NFS Server: /media/rpi-client/{serial}/                   │
+            │  └─ TFTP: /tftpboot/{serial}/                                 │
+            └────────────────────────────────────────────────────────────────┘
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: Physical Network Topology -->
+        <div class="slide" id="slide-5">
+            <h1 class="slide-title">🔌 물리적 네트워크 토폴로지</h1>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div>
+                        <h2 class="slide-subtitle">계층적 스위치 구조</h2>
+                        <div class="diagram" style="font-size: 0.8em;">
+        ┌─────────────────────────────────┐
+        │         🌐 공유기 (Router)       │
+        │         192.168.0.1             │
+        │    - WAN: 인터넷 연결            │
+        │    - LAN: 내부 네트워크          │
+        │    - WiFi: Windows PC 연결      │
+        └─────────────┬───────────────────┘
+                      │
+        ┌─────────────▼───────────────────┐
+        │      🔀 메인 스위치 (Core)       │
+        │    - 상위 스위치 역할            │
+        │    - PXE Server 연결            │
+        │    - 하위 스위치들 연결          │
+        │    - (추후) Windows PC 이더넷   │
+        └──┬──────────┬──────────┬────────┘
+           │          │          │
+    ┌──────▼──┐ ┌─────▼───┐ ┌────▼────┐
+    │스위치 #1│ │스위치 #2│ │스위치 #N│
+    │ RPi 1-7│ │RPi 8-14│ │   ...   │
+    └─────────┘ └─────────┘ └─────────┘
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="slide-subtitle">연결 장치별 역할</h2>
+                        <div class="card" style="margin-bottom: 20px;">
+                            <div class="card-title">🌐 공유기 (Gateway)</div>
+                            <ul>
+                                <li>인터넷 연결 (WAN)</li>
+                                <li>기본 게이트웨이: 192.168.0.1</li>
+                                <li>WiFi AP 기능 (현재 Windows PC 연결)</li>
+                            </ul>
+                        </div>
+                        <div class="card" style="margin-bottom: 20px;">
+                            <div class="card-title">🔀 메인 스위치</div>
+                            <ul>
+                                <li>네트워크 백본 역할</li>
+                                <li>PXE 서버 직접 연결</li>
+                                <li>하위 스위치 그룹 연결</li>
+                            </ul>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">🔀 하위 스위치 (×N)</div>
+                            <ul>
+                                <li>각 스위치당 RPi 최대 7대</li>
+                                <li>스위치 확장으로 시스템 확장</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: IP Address Scheme -->
+        <div class="slide" id="slide-6">
+            <h1 class="slide-title">📍 IP 주소 체계</h1>
+            <div class="slide-content">
+                <div class="table-container">
+                    <table>
+                        <tr>
+                            <th>구분</th>
+                            <th>IP 범위</th>
+                            <th>설명</th>
+                        </tr>
+                        <tr>
+                            <td><span class="highlight">🌐 Gateway</span></td>
+                            <td>192.168.0.1</td>
+                            <td>공유기 (인터넷 게이트웨이)</td>
+                        </tr>
+                        <tr>
+                            <td><span class="highlight">💻 PXE Server</span></td>
+                            <td>192.168.0.10</td>
+                            <td>고정 IP (DHCP/TFTP/NFS 서버)</td>
+                        </tr>
+                        <tr>
+                            <td><span class="success">🍓 RPi Clients</span></td>
+                            <td>192.168.0.100 ~ 199</td>
+                            <td>고정 DHCP 할당 (최대 100대)</td>
+                        </tr>
+                        <tr>
+                            <td><span class="warning">🔄 Dynamic Pool</span></td>
+                            <td>192.168.0.200 ~ 250</td>
+                            <td>기타 장치용 동적 DHCP</td>
+                        </tr>
+                        <tr>
+                            <td>🖥️ Windows PC</td>
+                            <td>동적 할당 (WiFi/DHCP)</td>
+                            <td>캡처 시스템 - 추후 고정 IP 권장</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="two-column" style="margin-top: 30px;">
+                    <div class="card">
+                        <div class="card-title">📋 네트워크 정보</div>
+                        <ul>
+                            <li><strong>서브넷:</strong> 255.255.255.0 (/24)</li>
+                            <li><strong>DNS:</strong> 8.8.8.8, 8.8.4.4</li>
+                            <li><strong>DHCP 서버:</strong> 192.168.0.10 (dnsmasq)</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">⚠️ 주의사항</div>
+                        <ul>
+                            <li>공유기 DHCP 서버는 <span class="warning">비활성화</span> 권장</li>
+                            <li>또는 공유기 DHCP 범위를 192.168.0.2~9로 제한</li>
+                            <li>RPi는 유선 이더넷 연결 필수</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Windows PC Capture System -->
+        <div class="slide" id="slide-7">
+            <h1 class="slide-title">🖥️ Windows PC 캡처 시스템</h1>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div>
+                        <h2 class="slide-subtitle">현재 구성 (WiFi)</h2>
+                        <div class="diagram" style="font-size: 0.85em;">
+    ┌─────────────────────┐
+    │    🌐 공유기         │
+    │    └─ WiFi AP       │
+    └──────────┬──────────┘
+               │ 무선
+               ▼
+    ┌─────────────────────┐
+    │  🖥️ Windows PC      │
+    │  ├─ 캡처 UI 프로그램 │
+    │  ├─ RPi 연결 관리    │
+    │  └─ 이미지 캡처      │
+    └─────────────────────┘
+                        </div>
+                        <div class="card" style="margin-top: 20px;">
+                            <div class="card-title">📡 WiFi 연결 특징</div>
+                            <ul>
+                                <li>설치 간편</li>
+                                <li>이동성 확보</li>
+                                <li class="warning">대역폭 제한 가능성</li>
+                                <li class="warning">지연시간 변동</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="slide-subtitle">향후 구성 (이더넷)</h2>
+                        <div class="diagram" style="font-size: 0.85em;">
+    ┌─────────────────────┐
+    │   🔀 메인 스위치     │
+    └──────────┬──────────┘
+               │ 유선 (1Gbps)
+               ▼
+    ┌─────────────────────┐
+    │  🖥️ Windows PC      │
+    │  ├─ 캡처 UI 프로그램 │
+    │  ├─ RPi 연결 관리    │
+    │  └─ 고속 이미지 전송 │
+    └─────────────────────┘
+                        </div>
+                        <div class="card" style="margin-top: 20px;">
+                            <div class="card-title">🔌 이더넷 연결 장점</div>
+                            <ul>
+                                <li class="success">안정적인 1Gbps 대역폭</li>
+                                <li class="success">낮은 지연시간</li>
+                                <li class="success">대용량 전송에 적합</li>
+                                <li>고정 IP 할당 권장</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 30px;">
+                    <div class="card-title">🔧 Windows PC 캡처 시스템 기능</div>
+                    <ul style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                        <li>RPi 장치 자동 검색</li>
+                        <li>원격 SSH 연결 관리</li>
+                        <li>카메라 캡처 명령</li>
+                        <li>이미지 수집 및 저장</li>
+                        <li>배치 처리 지원</li>
+                        <li>상태 모니터링 UI</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Service Ports -->
+        <div class="slide" id="slide-8">
+            <h1 class="slide-title">🔌 서비스 포트 및 프로토콜</h1>
+            <div class="slide-content">
+                <div class="table-container">
+                    <table>
+                        <tr>
+                            <th>서비스</th>
+                            <th>포트</th>
+                            <th>프로토콜</th>
+                            <th>용도</th>
+                        </tr>
+                        <tr>
+                            <td><span class="highlight">DHCP</span></td>
+                            <td>67, 68</td>
+                            <td>UDP</td>
+                            <td>IP 주소 자동 할당</td>
+                        </tr>
+                        <tr>
+                            <td><span class="highlight">TFTP</span></td>
+                            <td>69</td>
+                            <td>UDP</td>
+                            <td>부트 파일 전송 (bootcode.bin, kernel)</td>
+                        </tr>
+                        <tr>
+                            <td><span class="highlight">NFS</span></td>
+                            <td>2049</td>
+                            <td>TCP/UDP</td>
+                            <td>루트 파일시스템 마운트</td>
+                        </tr>
+                        <tr>
+                            <td><span class="success">SSH</span></td>
+                            <td>22</td>
+                            <td>TCP</td>
+                            <td>RPi 원격 접속</td>
+                        </tr>
+                        <tr>
+                            <td>DNS</td>
+                            <td>53</td>
+                            <td>TCP/UDP</td>
+                            <td>호스트명 해석 (선택)</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <h2 class="slide-subtitle">PXE 부팅 순서</h2>
+                <div class="diagram" style="font-size: 0.9em;">
+    RPi 전원 ON → EEPROM 네트워크 부팅 → DHCP 요청 (67/68) → IP 획득 + TFTP 서버 주소
+         │
+         └→ TFTP로 bootcode.bin 다운로드 (69) → kernel8.img 다운로드
+                │
+                └→ NFS 마운트 (2049) → 루트 파일시스템 로드 → 부팅 완료
+                        │
+                        └→ SSH 서비스 시작 (22) → 원격 접속 가능
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Program Execution - Overview -->
+        <div class="slide" id="slide-9">
+            <h1 class="slide-title">🚀 프로그램 실행 방법</h1>
+            <div class="slide-content">
+                <h2 class="slide-subtitle">두 가지 인터페이스 제공</h2>
+
+                <div class="two-column">
+                    <div class="card">
+                        <div class="card-title">💻 CLI 인터페이스</div>
+                        <div class="code-block">
+                            <code>cd ~/rpi-pxe-manager<br>./pxe</code>
+                        </div>
+                        <ul>
+                            <li>터미널 기반 텍스트 메뉴</li>
+                            <li>SSH 원격 접속 시 사용</li>
+                            <li>경량, 빠른 실행</li>
+                            <li>스크립트 자동화 가능</li>
+                        </ul>
+                        <div style="margin-top: 20px;">
+                            <p><strong>필요 조건:</strong></p>
+                            <p class="small-text">Python 3.x, psutil, netifaces (자동 설치)</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">🖼️ GUI 인터페이스</div>
+                        <div class="code-block">
+                            <code>cd ~/rpi-pxe-manager<br>./run_gui.sh</code>
+                            <br><br>또는<br><br>
+                            <code>python3 pxe_gui.py</code>
+                        </div>
+                        <ul>
+                            <li>CustomTkinter 기반 모던 UI</li>
+                            <li>다크/라이트 테마</li>
+                            <li>실시간 대시보드</li>
+                            <li>직관적인 클라이언트 관리</li>
+                        </ul>
+                        <div style="margin-top: 20px;">
+                            <p><strong>권장 해상도:</strong></p>
+                            <p class="small-text">최소 1200x700, 권장 1400x900</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 10: CLI Interface -->
+        <div class="slide" id="slide-10">
+            <h1 class="slide-title">💻 CLI 인터페이스 메뉴</h1>
+            <div class="slide-content">
+                <div class="diagram" style="font-size: 0.95em;">
+    ┌────────────────────────────────────────────────────────┐
+    │           🚀 RPI PXE Manager v2.4.0                    │
+    ├────────────────────────────────────────────────────────┤
+    │                                                        │
+    │   1. 📊 시스템 상태 확인    - CPU, 메모리, 디스크 현황  │
+    │                                                        │
+    │   2. 🖥️  클라이언트 관리    - RPi 추가/편집/삭제        │
+    │       ├─ 1. 새 클라이언트 추가                         │
+    │       ├─ 2. 클라이언트 목록 보기                       │
+    │       ├─ 3. 클라이언트 편집                            │
+    │       ├─ 4. 클라이언트 삭제                            │
+    │       └─ 5. SD 카드에서 복사                           │
+    │                                                        │
+    │   3. ⚙️  서버 설정          - IP, DHCP, 인터페이스 설정 │
+    │                                                        │
+    │   4. 🚀 서비스 관리         - dnsmasq, NFS 시작/중지   │
+    │                                                        │
+    │   5. 📝 로그 확인           - 서비스 로그 보기          │
+    │                                                        │
+    │   6. 🔧 초기 설정           - 자동 설정 마법사          │
+    │                                                        │
+    │   0. 종료                                              │
+    │                                                        │
+    └────────────────────────────────────────────────────────┘
+                </div>
+
+                <div class="card" style="margin-top: 30px;">
+                    <div class="card-title">⌨️ 사용 팁</div>
+                    <ul style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <li>숫자 입력 후 Enter로 메뉴 선택</li>
+                        <li>각 입력에 기본값 제공 (Enter로 수락)</li>
+                        <li>Ctrl+C로 작업 취소 가능</li>
+                        <li>색상으로 상태 구분 (녹색=정상, 빨강=오류)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 11: GUI Interface -->
+        <div class="slide" id="slide-11">
+            <h1 class="slide-title">🖼️ GUI 인터페이스 화면</h1>
+            <div class="slide-content">
+                <div class="diagram" style="font-size: 0.85em;">
+    ┌──────────────────────────────────────────────────────────────────────────┐
+    │ RPI PXE Manager v2.4.0                                                   │
+    ├────────────────────┬─────────────────────────────────────────────────────┤
+    │                    │                                                     │
+    │  🚀 RPI PXE Manager│                    📊 대시보드                       │
+    │     v2.4.0 GUI     │  ┌─────────────────────────────────────────────┐   │
+    │                    │  │  시스템 상태                                 │   │
+    │  ──────────────    │  │  ├─ CPU: ████████░░ 78%                     │   │
+    │                    │  │  ├─ Memory: █████░░░░░ 45%                  │   │
+    │  📊 대시보드       │  │  └─ Disk: ██████████ 92%                    │   │
+    │                    │  └─────────────────────────────────────────────┘   │
+    │  🖥️ 클라이언트 관리 │  ┌─────────────────────────────────────────────┐   │
+    │                    │  │  서비스 상태                                 │   │
+    │  ⚙️ 서버 설정      │  │  ├─ dnsmasq:        🟢 실행중               │   │
+    │                    │  │  ├─ nfs-kernel:     🟢 실행중               │   │
+    │  🚀 서비스 관리    │  │  └─ tftpd-hpa:      🟢 실행중               │   │
+    │                    │  └─────────────────────────────────────────────┘   │
+    │  📝 로그 확인      │  ┌─────────────────────────────────────────────┐   │
+    │                    │  │  등록된 클라이언트: 49대                     │   │
+    │  🔧 초기 설정      │  │  ├─ 온라인: 42대 🟢                         │   │
+    │                    │  │  └─ 오프라인: 7대 ⚫                        │   │
+    │  ──────────────    │  └─────────────────────────────────────────────┘   │
+    │  🌙 다크모드  ●    │                                                     │
+    │  🚪 종료           │                                                     │
+    │                    │                                                     │
+    └────────────────────┴─────────────────────────────────────────────────────┘
+                </div>
+
+                <div class="three-column" style="margin-top: 20px;">
+                    <div class="card">
+                        <div class="card-title">좌측 사이드바</div>
+                        <p class="small-text">메뉴 네비게이션<br>테마 전환<br>종료 버튼</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">우측 콘텐츠</div>
+                        <p class="small-text">선택된 메뉴 내용<br>실시간 업데이트<br>인터랙티브 컨트롤</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">자동 새로고침</div>
+                        <p class="small-text">2초마다 상태 갱신<br>5초마다 설정 동기화</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Initial Setup -->
+        <div class="slide" id="slide-12">
+            <h1 class="slide-title">🔧 초기 설정 마법사</h1>
+            <div class="slide-content">
+                <p>처음 시스템을 구성할 때 <span class="highlight">메뉴 6번 (🔧 초기 설정)</span>을 실행합니다.</p>
+
+                <h2 class="slide-subtitle">자동 구성 단계</h2>
+                <ul class="step-list">
+                    <li style="margin: 25px 0;"><strong>네트워크 감지</strong><br>
+                        <span class="small-text">활성 인터페이스 자동 감지 (eth0, enp* 등)</span>
+                    </li>
+                    <li style="margin: 25px 0;"><strong>고정 IP 설정</strong><br>
+                        <span class="small-text">서버 IP를 192.168.0.10으로 설정 (Netplan 구성)</span>
+                    </li>
+                    <li style="margin: 25px 0;"><strong>패키지 설치 확인</strong><br>
+                        <span class="small-text">dnsmasq, nfs-kernel-server, tftpd-hpa 설치 확인</span>
+                    </li>
+                    <li style="margin: 25px 0;"><strong>dnsmasq 구성</strong><br>
+                        <span class="small-text">/etc/dnsmasq.conf 자동 생성 및 테스트</span>
+                    </li>
+                    <li style="margin: 25px 0;"><strong>NFS 설정</strong><br>
+                        <span class="small-text">/media/rpi-client 디렉토리 및 /etc/exports 구성</span>
+                    </li>
+                    <li style="margin: 25px 0;"><strong>TFTP 설정</strong><br>
+                        <span class="small-text">/tftpboot 디렉토리 생성 및 권한 설정</span>
+                    </li>
+                </ul>
+
+                <div class="card" style="margin-top: 20px;">
+                    <div class="card-title">⚠️ 사전 요구사항</div>
+                    <ul>
+                        <li>서버가 공유기에 유선으로 연결되어 있어야 함</li>
+                        <li>sudo 권한이 있는 계정으로 실행</li>
+                        <li>공유기 DHCP가 비활성화되었거나 범위가 분리됨</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 13: Add Client -->
+        <div class="slide" id="slide-13">
+            <h1 class="slide-title">➕ 클라이언트 추가하기</h1>
+            <div class="slide-content">
+                <h2 class="slide-subtitle">새 RPi 등록 단계</h2>
+
+                <div class="two-column">
+                    <div>
+                        <ul class="step-list">
+                            <li style="margin: 20px 0;"><strong>시리얼 번호 입력</strong><br>
+                                <span class="small-text">RPi의 8자리 시리얼 (예: 1234abcd)</span><br>
+                                <span class="small-text">확인: cat /proc/cpuinfo | grep Serial</span>
+                            </li>
+                            <li style="margin: 20px 0;"><strong>MAC 주소 입력</strong><br>
+                                <span class="small-text">마지막 4자리만 입력 가능 (예: e3:0f)</span><br>
+                                <span class="small-text">자동완성: 88:a2:9e:1b:e3:0f</span>
+                            </li>
+                            <li style="margin: 20px 0;"><strong>IP 주소 할당</strong><br>
+                                <span class="small-text">다음 사용 가능 IP 자동 제안</span><br>
+                                <span class="small-text">범위: 192.168.0.100~199</span>
+                            </li>
+                            <li style="margin: 20px 0;"><strong>자동 구성 실행</strong><br>
+                                <span class="small-text">디렉토리 생성, 부트 파일, NFS 설정</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div>
+                        <div class="card" style="margin-bottom: 20px;">
+                            <div class="card-title">📁 자동 생성되는 항목</div>
+                            <div class="code-block">
+<code>/media/rpi-client/{serial}/
+├── etc/
+├── usr/
+├── home/
+└── ... (전체 루트 파일시스템)
+
+/tftpboot/{serial}/
+├── bootcode.bin
+├── cmdline.txt
+├── config.txt
+└── kernel8.img</code>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">🔄 시스템 복사</div>
+                            <p class="small-text">기존 클라이언트가 있으면 자동으로 파일시스템 복사 (rsync)</p>
+                            <p class="small-text">소요시간: 약 5~10분</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 14: Client Management -->
+        <div class="slide" id="slide-14">
+            <h1 class="slide-title">🖥️ 클라이언트 관리</h1>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div>
+                        <h2 class="slide-subtitle">클라이언트 목록 보기</h2>
+                        <div class="diagram" style="font-size: 0.8em;">
+┌────────────────────────────────────────────┐
+│ 등록된 클라이언트 (49개)                    │
+├────┬──────────┬─────────────┬──────┬──────┤
+│ #  │ Serial   │ MAC         │ IP   │ 상태 │
+├────┼──────────┼─────────────┼──────┼──────┤
+│ 1  │ 1234abcd │ ...1b:e3:0f │ .100 │ 🟢   │
+│ 2  │ 5678efgh │ ...1b:e3:10 │ .101 │ 🟢   │
+│ 3  │ 9abc1234 │ ...48:a2:11 │ .102 │ ⚫   │
+│ ...│ ...      │ ...         │ ...  │ ...  │
+└────┴──────────┴─────────────┴──────┴──────┘
+                        </div>
+                        <p class="small-text" style="margin-top: 10px;">
+                            🟢 온라인: SSH 접속 가능<br>
+                            ⚫ 오프라인: 응답 없음
+                        </p>
+                    </div>
+                    <div>
+                        <h2 class="slide-subtitle">관리 기능</h2>
+                        <div class="card" style="margin-bottom: 15px;">
+                            <div class="card-title">✏️ 편집</div>
+                            <p class="small-text">시리얼, MAC, IP, 호스트명 변경</p>
+                        </div>
+                        <div class="card" style="margin-bottom: 15px;">
+                            <div class="card-title">🗑️ 삭제</div>
+                            <p class="small-text">클라이언트 등록 해제 (선택적 파일 삭제)</p>
+                        </div>
+                        <div class="card" style="margin-bottom: 15px;">
+                            <div class="card-title">💾 SD 카드 복사</div>
+                            <p class="small-text">SD 카드의 OS를 NFS로 가져오기</p>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">🔄 상태 새로고침</div>
+                            <p class="small-text">전체 클라이언트 온라인 상태 확인</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 15: Service Management -->
+        <div class="slide" id="slide-15">
+            <h1 class="slide-title">🚀 서비스 관리</h1>
+            <div class="slide-content">
+                <div class="table-container">
+                    <table>
+                        <tr>
+                            <th>서비스</th>
+                            <th>역할</th>
+                            <th>시작</th>
+                            <th>중지</th>
+                            <th>재시작</th>
+                        </tr>
+                        <tr>
+                            <td><span class="highlight">dnsmasq</span></td>
+                            <td>DHCP/DNS/TFTP/PXE</td>
+                            <td colspan="3">
+                                <code>sudo systemctl start|stop|restart dnsmasq</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="highlight">nfs-kernel-server</span></td>
+                            <td>NFS 파일 공유</td>
+                            <td colspan="3">
+                                <code>sudo systemctl start|stop|restart nfs-kernel-server</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>tftpd-hpa</td>
+                            <td>TFTP 서버 (선택)</td>
+                            <td colspan="3">
+                                <code>sudo systemctl start|stop|restart tftpd-hpa</code>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="two-column" style="margin-top: 30px;">
+                    <div class="card">
+                        <div class="card-title">📋 상태 확인 명령</div>
+                        <div class="code-block">
+<code># 개별 서비스 상태
+sudo systemctl status dnsmasq
+sudo systemctl status nfs-kernel-server
+
+# dnsmasq 설정 테스트
+sudo dnsmasq --test
+
+# NFS 익스포트 확인
+showmount -e localhost
+
+# 실시간 로그
+sudo journalctl -u dnsmasq -f</code>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">⚠️ 서비스 의존성</div>
+                        <div class="diagram" style="font-size: 0.9em; padding: 15px;">
+    dnsmasq (DHCP/TFTP)
+         │
+         ▼
+    nfs-kernel-server
+         │
+         ▼
+    RPi 네트워크 부팅
+                        </div>
+                        <p class="small-text" style="margin-top: 10px;">
+                            dnsmasq가 먼저 실행되어야 RPi가 IP와 부트 서버 주소를 받음
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 16: Troubleshooting -->
+        <div class="slide" id="slide-16">
+            <h1 class="slide-title">🔧 문제 해결</h1>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div>
+                        <h2 class="slide-subtitle">일반적인 문제</h2>
+                        <div class="card" style="margin-bottom: 15px;">
+                            <div class="card-title">❌ RPi가 부팅되지 않음</div>
+                            <ul class="small-text">
+                                <li>dnsmasq 서비스 실행 확인</li>
+                                <li>TFTP 파일 존재 확인 (/tftpboot/{serial}/)</li>
+                                <li>MAC 주소 등록 확인</li>
+                                <li>이더넷 케이블 연결 확인</li>
+                            </ul>
+                        </div>
+                        <div class="card" style="margin-bottom: 15px;">
+                            <div class="card-title">❌ SSH 접속 불가</div>
+                            <ul class="small-text">
+                                <li>RPi 재부팅 필요 (첫 NFS 부팅 후)</li>
+                                <li>./fix_client_ssh.sh 실행</li>
+                                <li>방화벽 포트 22 확인</li>
+                            </ul>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">❌ sudo 권한 오류</div>
+                            <ul class="small-text">
+                                <li>NFS에서 SUID 비트 문제</li>
+                                <li>해결: chmod 4755 /usr/bin/sudo</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="slide-subtitle">도움말 스크립트</h2>
+                        <div class="code-block">
+<code># dnsmasq 설정 재생성
+python3 ~/fix_dnsmasq.py
+
+# DHCP 리스 정리
+python3 ~/clean_leases.py
+
+# SSH 설정 최적화
+~/fix_client_ssh.sh
+
+# TFTP 서버 주소 수정
+~/fix_siaddr.sh</code>
+                        </div>
+
+                        <div class="card" style="margin-top: 20px;">
+                            <div class="card-title">📝 로그 확인</div>
+                            <div class="code-block">
+<code># dnsmasq 로그
+sudo journalctl -u dnsmasq -n 50
+
+# NFS 로그
+sudo journalctl -u nfs-kernel-server -n 50
+
+# 실시간 모니터링
+sudo tail -f /var/log/syslog | grep -E "dnsmasq|nfs"</code>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 17: Directory Structure -->
+        <div class="slide" id="slide-17">
+            <h1 class="slide-title">📁 디렉토리 구조</h1>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div>
+                        <h2 class="slide-subtitle">서버 디렉토리</h2>
+                        <div class="code-block">
+<code>/home/rpi-server/
+├── rpi-pxe-manager/      # 관리 프로그램
+│   ├── pxe               # CLI 실행파일
+│   ├── pxe_gui.py        # GUI 프로그램
+│   └── run_gui.sh        # GUI 실행 스크립트
+├── fix_dnsmasq.py        # dnsmasq 수정
+├── clean_leases.py       # 리스 정리
+├── fix_client_ssh.sh     # SSH 수정
+└── fix_siaddr.sh         # TFTP 수정
+
+/media/rpi-client/        # NFS 루트
+├── {serial1}/            # RPi 1 파일시스템
+├── {serial2}/            # RPi 2 파일시스템
+└── ...
+
+/tftpboot/                # TFTP 부트
+├── {serial1}/            # RPi 1 부트 파일
+│   ├── bootcode.bin
+│   ├── cmdline.txt
+│   └── config.txt
+└── ...</code>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="slide-subtitle">설정 파일</h2>
+                        <div class="code-block">
+<code># 메인 설정
+~/.rpi_pxe_config.json    # 사용자 설정
+/etc/dnsmasq.conf         # DHCP/DNS/PXE 설정
+/etc/exports              # NFS 익스포트
+
+# 네트워크
+/etc/netplan/*.yaml       # 고정 IP 설정
+
+# DHCP 리스
+/var/lib/misc/dnsmasq.leases</code>
+                        </div>
+
+                        <div class="card" style="margin-top: 20px;">
+                            <div class="card-title">⚙️ 주요 설정값</div>
+                            <div class="code-block">
+<code># ~/.rpi_pxe_config.json
+{
+  "server_ip": "192.168.0.10",
+  "dhcp_range_start": "192.168.0.100",
+  "dhcp_range_end": "192.168.0.200",
+  "network_interface": "eth0",
+  "nfs_root": "/media/rpi-client",
+  "tftp_root": "/tftpboot"
+}</code>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 18: Quick Reference -->
+        <div class="slide" id="slide-18">
+            <h1 class="slide-title">📋 빠른 참조 가이드</h1>
+            <div class="slide-content">
+                <div class="three-column">
+                    <div class="card">
+                        <div class="card-title">🚀 시작하기</div>
+                        <div class="code-block">
+<code># GUI 실행
+cd ~/rpi-pxe-manager
+./run_gui.sh
+
+# CLI 실행
+./pxe
+
+# 서비스 시작
+sudo systemctl start dnsmasq
+sudo systemctl start nfs-kernel-server</code>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">🔍 상태 확인</div>
+                        <div class="code-block">
+<code># 서비스 상태
+systemctl status dnsmasq
+systemctl status nfs-kernel-server
+
+# 클라이언트 핑
+ping 192.168.0.100
+
+# SSH 테스트
+ssh pi@192.168.0.100</code>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">🔧 문제 해결</div>
+                        <div class="code-block">
+<code># 설정 재생성
+python3 ~/fix_dnsmasq.py
+
+# 서비스 재시작
+sudo systemctl restart dnsmasq
+
+# 로그 확인
+journalctl -u dnsmasq -f</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 30px;">
+                    <div class="card-title">📞 주요 연락처 / 참고자료</div>
+                    <div class="two-column">
+                        <div>
+                            <ul>
+                                <li><strong>프로젝트 위치:</strong> ~/rpi-pxe-manager</li>
+                                <li><strong>설정 파일:</strong> ~/.rpi_pxe_config.json</li>
+                                <li><strong>서버 IP:</strong> 192.168.0.10</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <ul>
+                                <li><strong>클라이언트 IP 범위:</strong> 192.168.0.100~199</li>
+                                <li><strong>기본 사용자:</strong> pi</li>
+                                <li><strong>버전:</strong> v2.4.0</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 19: Summary -->
+        <div class="slide title-slide" id="slide-19">
+            <div class="main-title">✅ 요약</div>
+            <div style="text-align: left; max-width: 900px; margin: 0 auto;">
+                <div class="card" style="margin: 20px 0;">
+                    <div class="card-title">🌐 네트워크 구성</div>
+                    <p>공유기 → 메인 스위치 → 하위 스위치들 → RPi (최대 7대/스위치)</p>
+                    <p>Windows PC: 현재 WiFi, 추후 이더넷으로 메인 스위치 연결 예정</p>
+                </div>
+                <div class="card" style="margin: 20px 0;">
+                    <div class="card-title">💻 프로그램 실행</div>
+                    <p><code>./pxe</code> (CLI) 또는 <code>./run_gui.sh</code> (GUI)</p>
+                    <p>초기 설정: 메뉴 6번 → 자동 구성 마법사</p>
+                </div>
+                <div class="card" style="margin: 20px 0;">
+                    <div class="card-title">🔧 일상 운영</div>
+                    <p>클라이언트 추가: 시리얼 + MAC (4자리) + IP 자동 할당</p>
+                    <p>서비스: dnsmasq, nfs-kernel-server 관리</p>
+                </div>
+            </div>
+            <div style="margin-top: 40px; color: #888;">
+                <p>문의사항이 있으시면 관리자에게 연락해 주세요.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="slide-counter">
+        <span id="current-slide">1</span> / <span id="total-slides">19</span>
+    </div>
+
+    <div class="navigation">
+        <button class="nav-btn" id="prev-btn" onclick="prevSlide()">◀ 이전</button>
+        <button class="nav-btn" id="next-btn" onclick="nextSlide()">다음 ▶</button>
+    </div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = 19;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+
+            slides.forEach(slide => slide.classList.remove('active'));
+            document.getElementById(`slide-${currentSlide}`).classList.add('active');
+
+            document.getElementById('current-slide').textContent = currentSlide;
+
+            // Update button states
+            document.getElementById('prev-btn').disabled = currentSlide === 1;
+            document.getElementById('next-btn').disabled = currentSlide === totalSlides;
+        }
+
+        function nextSlide() {
+            currentSlide++;
+            showSlide(currentSlide);
+        }
+
+        function prevSlide() {
+            currentSlide--;
+            showSlide(currentSlide);
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                prevSlide();
+            } else if (e.key === 'Home') {
+                currentSlide = 1;
+                showSlide(currentSlide);
+            } else if (e.key === 'End') {
+                currentSlide = totalSlides;
+                showSlide(currentSlide);
+            }
+        });
+
+        // Initialize
+        showSlide(1);
+    </script>
+</body>
+</html>

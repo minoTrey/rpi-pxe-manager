@@ -1,0 +1,13 @@
+# RPI PXE Manager - Python Dependencies
+# 설치: pip install -r requirements.txt
+
+# 시스템 모니터링 (CLI/GUI 공통)
+psutil>=5.9.0
+
+# 네트워크 인터페이스 정보 (CLI/GUI 공통)
+netifaces>=0.11.0
+
+# GUI 라이브러리 (PyQt5)
+# apt로 설치 권장: sudo apt install python3-pyqt5
+# 또는 pip: pip install PyQt5
+PyQt5>=5.15.0

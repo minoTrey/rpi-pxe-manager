@@ -54,6 +54,9 @@ class Colors:
 class RPIPXEManager:
     def __init__(self):
         self.config_file = Path.home() / '.rpi_pxe_config.json'
+        # 프로젝트 디렉토리의 클라이언트 백업 파일
+        self.project_dir = Path(__file__).parent.resolve()
+        self.clients_backup_file = self.project_dir / 'clients_backup.json'
         self.config = self.load_config()
         self.running = True
         
@@ -67,7 +70,7 @@ class RPIPXEManager:
             'dhcp_range_start': '192.168.0.100',
             'dhcp_range_end': '192.168.0.200',
             'network_interface': 'eth0',
-            'nfs_root': '/media/rpi-client',
+            'nfs_root': '/media/polygom3d/rpi-client',
             'tftp_root': '/tftpboot',
             'clients': []
         }
@@ -78,8 +81,133 @@ class RPIPXEManager:
             with open(self.config_file, 'w') as f:
                 json.dump(self.config, f, indent=2)
             print(f"{Colors.GREEN}  ✓ 설정 파일 저장됨: {self.config_file} (클라이언트 수: {len(self.config.get('clients', []))}개){Colors.ENDC}")
+
+            # 프로젝트 디렉토리에 클라이언트 백업 저장
+            self.save_clients_backup()
         except Exception as e:
             print(f"{Colors.FAIL}  ✗ 설정 파일 저장 실패: {e}{Colors.ENDC}")
+
+    def save_clients_backup(self):
+        """프로젝트 디렉토리에 클라이언트 백업 저장"""
+        try:
+            backup_data = {
+                'backup_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'server_ip': self.config.get('server_ip', ''),
+                'nfs_root': self.config.get('nfs_root', ''),
+                'clients': self.config.get('clients', [])
+            }
+            with open(self.clients_backup_file, 'w') as f:
+                json.dump(backup_data, f, indent=2, ensure_ascii=False)
+            print(f"{Colors.GREEN}  ✓ 클라이언트 백업 저장됨: {self.clients_backup_file}{Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.WARNING}  ⚠️  클라이언트 백업 저장 실패: {e}{Colors.ENDC}")
+
+    def load_clients_backup(self) -> dict:
+        """프로젝트 디렉토리에서 클라이언트 백업 로드"""
+        if self.clients_backup_file.exists():
+            try:
+                with open(self.clients_backup_file, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"{Colors.FAIL}  ✗ 백업 파일 로드 실패: {e}{Colors.ENDC}")
+        return None
+
+    def restore_clients_from_backup(self):
+        """백업에서 클라이언트 복원"""
+        self.print_header()
+        print(f"{Colors.BOLD}📦 클라이언트 백업/복원{Colors.ENDC}\n")
+
+        backup = self.load_clients_backup()
+
+        if backup:
+            print(f"{Colors.CYAN}현재 백업 정보:{Colors.ENDC}")
+            print(f"  백업 날짜: {backup.get('backup_date', '알 수 없음')}")
+            print(f"  서버 IP: {backup.get('server_ip', '알 수 없음')}")
+            print(f"  NFS 경로: {backup.get('nfs_root', '알 수 없음')}")
+            print(f"  클라이언트 수: {len(backup.get('clients', []))}개\n")
+
+            if backup.get('clients'):
+                print(f"{Colors.CYAN}백업된 클라이언트 목록:{Colors.ENDC}")
+                for i, client in enumerate(backup['clients'], 1):
+                    print(f"  {i}. {client.get('hostname', 'unknown')} - {client.get('serial', 'N/A')} ({client.get('ip', 'N/A')})")
+                print()
+        else:
+            print(f"{Colors.WARNING}저장된 백업이 없습니다.{Colors.ENDC}\n")
+
+        print(f"{Colors.BOLD}옵션:{Colors.ENDC}")
+        print(f"  {Colors.CYAN}1.{Colors.ENDC} 현재 설정을 백업으로 저장")
+        print(f"  {Colors.CYAN}2.{Colors.ENDC} 백업에서 클라이언트 복원")
+        print(f"  {Colors.CYAN}3.{Colors.ENDC} dnsmasq.conf에서 클라이언트 가져오기")
+        print(f"  {Colors.CYAN}0.{Colors.ENDC} 돌아가기")
+        print()
+
+        choice = input("선택: ").strip()
+
+        if choice == '1':
+            self.save_clients_backup()
+            print(f"\n{Colors.GREEN}✓ 백업 저장 완료{Colors.ENDC}")
+
+        elif choice == '2':
+            if not backup or not backup.get('clients'):
+                print(f"\n{Colors.FAIL}복원할 백업이 없습니다.{Colors.ENDC}")
+            else:
+                confirm = input(f"\n{Colors.WARNING}현재 클라이언트 목록을 백업으로 대체하시겠습니까? (y/N): {Colors.ENDC}").lower()
+                if confirm == 'y':
+                    self.config['clients'] = backup['clients']
+                    self.save_config()
+                    # dnsmasq 설정도 재생성
+                    self.generate_dnsmasq_config()
+                    print(f"\n{Colors.GREEN}✓ 클라이언트 복원 완료 ({len(backup['clients'])}개){Colors.ENDC}")
+
+        elif choice == '3':
+            self.import_clients_from_dnsmasq()
+
+        input("\n계속하려면 Enter...")
+
+    def import_clients_from_dnsmasq(self):
+        """dnsmasq.conf에서 클라이언트 정보 가져오기"""
+        dnsmasq_conf = Path('/etc/dnsmasq.conf')
+
+        if not dnsmasq_conf.exists():
+            print(f"{Colors.FAIL}/etc/dnsmasq.conf 파일이 없습니다.{Colors.ENDC}")
+            return
+
+        try:
+            with open(dnsmasq_conf, 'r') as f:
+                content = f.read()
+
+            import re
+            clients = []
+            # dhcp-host=MAC,IP,hostname 형식 파싱
+            pattern = r'dhcp-host=([0-9a-fA-F:]+),([0-9.]+),(\S+)'
+            matches = re.findall(pattern, content)
+
+            for mac, ip, hostname in matches:
+                # 시리얼 번호 추출 (hostname에서)
+                serial = hostname.replace('rpi-', '') if hostname.startswith('rpi-') else hostname
+                clients.append({
+                    'serial': serial,
+                    'mac': mac.lower(),
+                    'ip': ip,
+                    'hostname': hostname,
+                    'boot_mode': 'nfs'
+                })
+
+            if clients:
+                print(f"\n{Colors.CYAN}dnsmasq.conf에서 발견된 클라이언트:{Colors.ENDC}")
+                for i, c in enumerate(clients, 1):
+                    print(f"  {i}. {c['hostname']} - {c['serial']} ({c['ip']})")
+
+                confirm = input(f"\n{Colors.YELLOW}이 클라이언트들을 가져오시겠습니까? (y/N): {Colors.ENDC}").lower()
+                if confirm == 'y':
+                    self.config['clients'] = clients
+                    self.save_config()
+                    print(f"\n{Colors.GREEN}✓ {len(clients)}개 클라이언트 가져오기 완료{Colors.ENDC}")
+            else:
+                print(f"{Colors.WARNING}dnsmasq.conf에서 클라이언트를 찾을 수 없습니다.{Colors.ENDC}")
+
+        except Exception as e:
+            print(f"{Colors.FAIL}dnsmasq.conf 읽기 실패: {e}{Colors.ENDC}")
     
     def clear_screen(self):
         """화면 지우기"""
@@ -233,12 +361,13 @@ class RPIPXEManager:
             print(f"  {Colors.CYAN}2.{Colors.ENDC} 클라이언트 제거")
             print(f"  {Colors.CYAN}3.{Colors.ENDC} 클라이언트 정보 편집")
             print(f"  {Colors.CYAN}4.{Colors.ENDC} SD 카드에서 시스템 복사")
+            print(f"  {Colors.CYAN}5.{Colors.ENDC} 📦 클라이언트 백업/복원")
             print(f"  {Colors.CYAN}R.{Colors.ENDC} 상태 새로고침")
             print(f"  {Colors.CYAN}0.{Colors.ENDC} 뒤로 가기")
             print()
-            
+
             choice = input(f"{Colors.CYAN}선택: {Colors.ENDC}").strip().upper()
-            
+
             if choice == '1':
                 self.add_client()
             elif choice == '2':
@@ -247,6 +376,8 @@ class RPIPXEManager:
                 self.edit_client()
             elif choice == '4':
                 self.copy_from_sd()
+            elif choice == '5':
+                self.restore_clients_from_backup()
             elif choice == 'R':
                 print(f"{Colors.CYAN}상태를 새로고침합니다...{Colors.ENDC}")
                 continue  # 루프 다시 시작하여 상태 업데이트
@@ -1832,7 +1963,40 @@ dhcp-boot=tag:{client.get('mac', '')},{client['serial']}/bootcode.bin,rpi-server
         confirm = input("자동 설정을 시작하시겠습니까? (Y/n): ").lower()
         if confirm == 'n':
             return
-        
+
+        # 필수 시스템 패키지 확인 및 설치
+        print(f"\n{Colors.CYAN}📦 필수 패키지 확인 중...{Colors.ENDC}")
+        required_packages = ['dnsmasq', 'nfs-kernel-server']
+        missing_packages = []
+
+        for pkg in required_packages:
+            result = subprocess.run(['dpkg', '-l', pkg], capture_output=True)
+            if result.returncode != 0:
+                missing_packages.append(pkg)
+                print(f"  ✗ {pkg} 미설치")
+            else:
+                print(f"  ✓ {pkg} 설치됨")
+
+        if missing_packages:
+            print(f"\n{Colors.WARNING}⚠️  필수 패키지가 설치되어 있지 않습니다!{Colors.ENDC}")
+            print(f"{Colors.YELLOW}다음 명령어로 설치하세요:{Colors.ENDC}")
+            print(f"  sudo apt update && sudo apt install -y {' '.join(missing_packages)}\n")
+
+            install_now = input(f"지금 자동으로 설치하시겠습니까? (Y/n): ").lower()
+            if install_now != 'n':
+                try:
+                    print(f"\n{Colors.CYAN}📦 패키지 설치 중...{Colors.ENDC}")
+                    subprocess.run(['sudo', 'apt', 'update'], check=True)
+                    subprocess.run(['sudo', 'apt', 'install', '-y'] + missing_packages, check=True)
+                    print(f"{Colors.GREEN}  ✓ 패키지 설치 완료!{Colors.ENDC}\n")
+                except Exception as e:
+                    print(f"{Colors.FAIL}  ✗ 설치 실패: {e}{Colors.ENDC}")
+                    print(f"  수동으로 설치 후 다시 시도하세요.")
+                    return
+            else:
+                print(f"\n{Colors.WARNING}패키지 설치 후 다시 실행하세요.{Colors.ENDC}")
+                return
+
         print(f"\n{Colors.CYAN}🔍 네트워크 환경 자동 감지 중...{Colors.ENDC}")
         
         # 네트워크 인터페이스 자동 감지 및 설정
@@ -1960,7 +2124,7 @@ network:
                 except:
                     print(f"  ⚠️  {path} 생성 실패 (권한 필요)")
         
-        # /media/rpi-client 권한 설정 (모두에게 읽기/쓰기/실행 권한)
+        # /media/polygom3d/rpi-client 권한 설정 (모두에게 읽기/쓰기/실행 권한)
         try:
             subprocess.run(['sudo', 'chmod', '777', self.config['nfs_root']], check=True)
             print(f"  ✓ {self.config['nfs_root']} 권한 설정 완료 (777)")
