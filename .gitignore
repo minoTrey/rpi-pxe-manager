@@ -35,4 +35,3 @@ __pycache__/
 *_patch.py
 *_updated.py
 # Client data (personal)
-clients_backup.json

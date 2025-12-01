@@ -1,0 +1,427 @@
+{
+  "backup_date": "2025-11-28 17:32:36",
+  "server_ip": "192.168.0.10",
+  "nfs_root": "/media/polygom3d/rpi-client",
+  "clients": [
+    {
+      "serial": "d3a76dcf",
+      "mac": "88:a2:9e:1b:e3:ac",
+      "ip": "192.168.0.101",
+      "hostname": "d3a76dcf",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "eb2a1f17",
+      "mac": "88:a2:9e:1b:e3:0f",
+      "ip": "192.168.0.102",
+      "hostname": "eb2a1f17",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "248ceaa9",
+      "mac": "88:a2:9e:1b:db:da",
+      "ip": "192.168.0.104",
+      "hostname": "248ceaa9",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "99f33567",
+      "mac": "88:a2:9e:1b:e3:a7",
+      "ip": "192.168.0.105",
+      "hostname": "99f33567",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "8c17f463",
+      "mac": "88:a2:9e:1b:e2:28",
+      "ip": "192.168.0.106",
+      "hostname": "8c17f463",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "7ac977d7",
+      "mac": "88:a2:9e:1b:e3:74",
+      "ip": "192.168.0.107",
+      "hostname": "7ac977d7",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "21898bb8",
+      "mac": "88:a2:9e:1b:e3:b7",
+      "ip": "192.168.0.108",
+      "hostname": "21898bb8",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "02a8db6e",
+      "mac": "88:a2:9e:1b:e3:8b",
+      "ip": "192.168.0.109",
+      "hostname": "02a8db6e",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "dd29c8d0",
+      "mac": "88:a2:9e:1b:e3:af",
+      "ip": "192.168.0.110",
+      "hostname": "dd29c8d0",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "e6b31567",
+      "mac": "88:a2:9e:1b:e3:d9",
+      "ip": "192.168.0.111",
+      "hostname": "e6b31567",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "2f475b57",
+      "mac": "88:a2:9e:1b:e3:6f",
+      "ip": "192.168.0.112",
+      "hostname": "2f475b57",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "4e6afb8c",
+      "mac": "88:a2:9e:1b:e2:d2",
+      "ip": "192.168.0.113",
+      "hostname": "4e6afb8c",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "ca042102",
+      "mac": "d8:3a:dd:bf:d7:a6",
+      "ip": "192.168.0.114",
+      "hostname": "ca042102",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "9ec88855",
+      "mac": "88:a2:9e:1b:e2:6b",
+      "ip": "192.168.0.115",
+      "hostname": "9ec88855",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "16d0f5fa",
+      "mac": "88:a2:9e:1b:e2:c1",
+      "ip": "192.168.0.116",
+      "hostname": "16d0f5fa",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "97deca82",
+      "mac": "88:a2:9e:1b:e3:43",
+      "ip": "192.168.0.117",
+      "hostname": "97deca82",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "9dcd5658",
+      "mac": "88:a2:9e:1b:e4:20",
+      "ip": "192.168.0.118",
+      "hostname": "9dcd5658",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "bac39257",
+      "mac": "88:a2:9e:1b:e4:c1",
+      "ip": "192.168.0.119",
+      "hostname": "bac39257",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "e3f9f562",
+      "mac": "88:a2:9e:1b:e4:26",
+      "ip": "192.168.0.120",
+      "hostname": "e3f9f562",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "e961ecbe",
+      "mac": "88:a2:9e:1b:e3:96",
+      "ip": "192.168.0.121",
+      "hostname": "e961ecbe",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "4a7e515f",
+      "mac": "88:a2:9e:1b:e2:fc",
+      "ip": "192.168.0.122",
+      "hostname": "4a7e515f",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "8d04e9f5",
+      "mac": "88:a2:9e:1b:e4:2b",
+      "ip": "192.168.0.123",
+      "hostname": "8d04e9f5",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "42c7c11f",
+      "mac": "d8:3a:dd:bf:d8:ae",
+      "ip": "192.168.0.124",
+      "hostname": "42c7c11f",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "a3cd910f",
+      "mac": "88:a2:9e:1b:e1:a5",
+      "ip": "192.168.0.125",
+      "hostname": "a3cd910f",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "3292dd69",
+      "mac": "88:a2:9e:1b:e3:3b",
+      "ip": "192.168.0.126",
+      "hostname": "3292dd69",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "d2f6cf1e",
+      "mac": "88:a2:9e:1b:e3:88",
+      "ip": "192.168.0.127",
+      "hostname": "d2f6cf1e",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "8fba527a",
+      "mac": "d8:3a:dd:f0:1f:07",
+      "ip": "192.168.0.128",
+      "hostname": "8fba527a",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "49bbed18",
+      "mac": "88:a2:9e:1b:e3:f7",
+      "ip": "192.168.0.129",
+      "hostname": "49bbed18",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "402b15e2",
+      "mac": "d8:3a:dd:47:c1:43",
+      "ip": "192.168.0.130",
+      "hostname": "402b15e2",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "82ae7cf5",
+      "mac": "88:a2:9e:1b:e3:78",
+      "ip": "192.168.0.131",
+      "hostname": "82ae7cf5",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "94ce4af8",
+      "mac": "88:a2:9e:13:10:95",
+      "ip": "192.168.0.132",
+      "hostname": "94ce4af8",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "eaf9ef0c",
+      "mac": "d8:3a:dd:3c:a4:e8",
+      "ip": "192.168.0.134",
+      "hostname": "eaf9ef0c",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "dad9c6fa",
+      "mac": "88:a2:9e:13:10:67",
+      "ip": "192.168.0.135",
+      "hostname": "dad9c6fa",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "872c700c",
+      "mac": "88:a2:9e:4f:aa:47",
+      "ip": "192.168.0.136",
+      "hostname": "872c700c",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "8cf36e09",
+      "mac": "88:a2:9e:47:a6:2a",
+      "ip": "192.168.0.100",
+      "hostname": "8cf36e09",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "57a35920",
+      "mac": "88:a2:9e:48:b4:52",
+      "ip": "192.168.0.137",
+      "hostname": "57a35920",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "b566855a",
+      "mac": "88:a2:9e:4f:a9:8f",
+      "ip": "192.168.0.138",
+      "hostname": "b566855a",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "a35798f5",
+      "mac": "88:a2:9e:48:b5:69",
+      "ip": "192.168.0.139",
+      "hostname": "a35798f5",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "2135c9a8",
+      "mac": "88:a2:9e:48:b5:ba",
+      "ip": "192.168.0.140",
+      "hostname": "2135c9a8",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "c7fe85d6",
+      "mac": "88:a2:9e:48:b6:8c",
+      "ip": "192.168.0.141",
+      "hostname": "c7fe85d6",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "64823573",
+      "mac": "88:a2:9e:48:b5:e6",
+      "ip": "192.168.0.142",
+      "hostname": "64823573",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "3e4d278e",
+      "mac": "88:a2:9e:4f:aa:60",
+      "ip": "192.168.0.143",
+      "hostname": "3e4d278e",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "483cbd2e",
+      "mac": "88:a2:9e:48:b6:a9",
+      "ip": "192.168.0.144",
+      "hostname": "483cbd2e",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "1ca078be",
+      "mac": "88:a2:9e:4f:aa:c7",
+      "ip": "192.168.0.145",
+      "hostname": "1ca078be",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "87f94fe3",
+      "mac": "88:a2:9e:48:b7:d6",
+      "ip": "192.168.0.146",
+      "hostname": "87f94fe3",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "1382fdcc",
+      "mac": "88:a2:9e:4f:a9:e9",
+      "ip": "192.168.0.147",
+      "hostname": "1382fdcc",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "5eb22d5c",
+      "mac": "88:a2:9e:4f:a9:fa",
+      "ip": "192.168.0.148",
+      "hostname": "5eb22d5c",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "f32fc640",
+      "mac": "88:a2:9e:4f:aa:0b",
+      "ip": "192.168.0.149",
+      "hostname": "f32fc640",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "c4b1cb56",
+      "mac": "88:a2:9e:48:b5:43",
+      "ip": "192.168.0.150",
+      "hostname": "c4b1cb56",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "d69c9a64",
+      "mac": "88:a2:9e:48:b6:c8",
+      "ip": "192.168.0.151",
+      "hostname": "d69c9a64",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "1af43067",
+      "mac": "88:a2:9e:48:b7:ad",
+      "ip": "192.168.0.152",
+      "hostname": "1af43067",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "48cdf422",
+      "mac": "88:a2:9e:48:b5:6e",
+      "ip": "192.168.0.153",
+      "hostname": "48cdf422",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "502da09f",
+      "mac": "88:a2:9e:48:b6:da",
+      "ip": "192.168.0.154",
+      "hostname": "502da09f",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "d80c0b88",
+      "mac": "88:a2:9e:4f:a9:b1",
+      "ip": "192.168.0.155",
+      "hostname": "d80c0b88",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "1a8e8f1f",
+      "mac": "88:a2:9e:48:b4:99",
+      "ip": "192.168.0.156",
+      "hostname": "1a8e8f1f",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "5688caa4",
+      "mac": "88:a2:9e:4f:a9:ec",
+      "ip": "192.168.0.157",
+      "hostname": "5688caa4",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "d15a3415",
+      "mac": "88:a2:9e:4f:aa:8d",
+      "ip": "192.168.0.158",
+      "hostname": "d15a3415",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "81fe4bf3",
+      "mac": "d8:3a:dd:ee:cb:4f",
+      "ip": "192.168.0.133",
+      "hostname": "81fe4bf3",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "4ac7f8a1",
+      "mac": "88:a2:92:1b:e3:46",
+      "ip": "192.168.0.103",
+      "hostname": "4ac7f8a1",
+      "boot_mode": "nfs"
+    },
+    {
+      "serial": "38b04798",
+      "mac": "88:a2:92:1b:e3:b2",
+      "ip": "192.168.0.159",
+      "hostname": "38b04798",
+      "boot_mode": "nfs"
+    }
+  ]
+}
