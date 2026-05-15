@@ -111,7 +111,7 @@ echo "server: `$SERVER_IP`$NFS_ALIAS"
 echo "client: `$CLIENT_SERIAL / `$CLIENT_HOSTNAME"
 echo "source: `$SOURCE_ROOT"
 
-if ! command -v rsync >/dev/null 2>&1 || ! command -v mount.nfs >/dev/null 2>&1; then
+if ! command -v rsync >/dev/null 2>&1 || { ! command -v mount.nfs >/dev/null 2>&1 && ! [ -x /sbin/mount.nfs ] && ! [ -x /usr/sbin/mount.nfs ]; }; then
   echo "Installing rsync and nfs-common..."
   sudo apt-get update
   sudo apt-get install -y rsync nfs-common
@@ -125,12 +125,15 @@ fi
 sudo mkdir -p "`$WORK/nfs/`$CLIENT_SERIAL"
 
 if [ "`$SOURCE_ROOT" = "/" ]; then
-  sudo rsync -aHAXx --numeric-ids --delete \
+  sudo rsync -aHx --inplace --whole-file --omit-dir-times --numeric-ids \
     --exclude=/dev/* --exclude=/proc/* --exclude=/sys/* --exclude=/run/* \
     --exclude=/tmp/* --exclude=/mnt/* --exclude=/media/* --exclude=/lost+found \
+    --exclude=/usr/include/* --exclude=/usr/share/doc/* --exclude=/usr/share/man/* \
+    --exclude=/usr/share/info/* --exclude=/var/cache/apt/archives/* \
+    --exclude=/var/lib/apt/lists/* \
     / "`$WORK/nfs/`$CLIENT_SERIAL"/
 else
-  sudo rsync -aHAX --numeric-ids --delete "`$SOURCE_ROOT"/ "`$WORK/nfs/`$CLIENT_SERIAL"/
+  sudo rsync -aH --inplace --whole-file --omit-dir-times --numeric-ids "`$SOURCE_ROOT"/ "`$WORK/nfs/`$CLIENT_SERIAL"/
 fi
 
 if [ -d "`$WORK/nfs/`$CLIENT_SERIAL/etc" ]; then
@@ -147,7 +150,8 @@ echo "Done: rootfs copied to `$SERVER_IP:`$NFS_ALIAS/`$CLIENT_SERIAL"
 echo "Power off the Pi, remove the OS SD card, then retry Raspberry Pi 4 network boot."
 "@
 
-    Set-Content -LiteralPath $target.ScriptPath -Value $script -Encoding UTF8
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($target.ScriptPath, $script, $utf8NoBom)
 
     $guide = @"
 RPi4 network boot rootfs helper

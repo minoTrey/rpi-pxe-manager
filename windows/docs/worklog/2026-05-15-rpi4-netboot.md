@@ -302,3 +302,46 @@ PR에는 다음 내용을 포함했습니다.
 4. `tools\lite-provider.ps1`
 5. `tools\rootfs-helper.ps1`
 6. `gui\RpiNetbootManagerGui.cs`
+
+## 2026-05-15 15:25-16:15 RPi4 SD 부팅 기반 rootfs 복제
+
+사용자가 RPi4에 SD카드를 꽂고 Raspberry Pi OS Lite 64-bit Trixie가 부팅되는 것을 확인했습니다. 서버 PC에서 `10.73.0.155` ping과 SSH port 22 open을 확인했습니다.
+
+자동 rootfs import는 한 번 실행됐지만 실패했습니다. Pi 안의 `/boot/firmware/rpi4-netboot-rootfs-import-d80c0b88.log`를 확인한 결과, Pi가 인터넷/DNS를 쓰지 못해 `nfs-common` 설치에 실패했고, `mount.nfs`가 없어 NFS mount가 실패했습니다.
+
+Windows에서 Debian Trixie arm64 패키지 5개를 내려받아 Pi에 복사하고 오프라인 설치했습니다.
+
+- `keyutils_1.6.3-6_arm64.deb`
+- `libevent-core-2.1-7t64_2.1.12-stable-10+b1_arm64.deb`
+- `libnfsidmap1_2.8.3-1_arm64.deb`
+- `rpcbind_1.2.7-1_arm64.deb`
+- `nfs-common_2.8.3-1_arm64.deb`
+
+설치 후 Pi에서 `10.73.0.10:/rpi` NFS mount/write 테스트가 성공했습니다.
+
+WinNFSd는 대량 rootfs 쓰기 중 `Input/output error`와 `Stale file handle`을 냈습니다. 이 문제를 줄이기 위해 `tools\rootfs-helper.ps1`에서 생성하는 rsync 옵션을 다음 방향으로 바꿨습니다.
+
+- `--inplace`: 임시 파일 생성 후 rename하는 패턴 회피
+- `--whole-file`: 델타 계산보다 단순 전송 우선
+- `--omit-dir-times`: directory mtime 설정 오류 감소
+- `/usr/include`, `/usr/share/doc`, `/usr/share/man`, `/usr/share/info`, apt cache/list 제외
+- UTF-8 BOM 없는 bash script 생성
+
+기존 깨진 partial rootfs는 삭제하지 않고 `D:\rootfs\d80c0b88.failed-20260515-155755`로 보존했습니다. 새 `D:\rootfs\d80c0b88`에 다시 복제했고, rsync는 일부 비필수 파일 오류로 code 23을 냈지만 부팅 핵심 파일은 준비됐습니다.
+
+확인된 핵심 파일:
+
+- `D:\rootfs\d80c0b88\bin\sh`
+- `D:\rootfs\d80c0b88\sbin\init`
+- `D:\rootfs\d80c0b88\usr\lib\systemd\systemd`
+- `D:\rootfs\d80c0b88\usr\lib\modules`
+- `D:\rootfs\d80c0b88\etc\fstab`
+
+`etc\fstab`는 NFS rootfs용으로 수정했습니다. Pi에서 NFS로 rootfs 핵심 파일을 읽는 검증은 `ROOTFS_NFS_READ_OK`로 통과했습니다. 이후 Pi에 `poweroff`를 보냈습니다.
+
+다음 물리 작업:
+
+1. RPi4 전원이 완전히 내려간 것을 확인합니다.
+2. SD카드를 제거합니다.
+3. SD 없이 전원을 다시 넣습니다.
+4. 화면에 나오는 새 메시지와 `D:\logs\rpi-boot-lite.log`를 같이 확인합니다.

@@ -6,7 +6,7 @@
 
 ## 현재 한 줄 상태
 
-RPi4는 DHCP/TFTP로 커널까지 받는 데 성공했습니다. 현재 막힌 지점은 `D:\rootfs\d80c0b88`에 실제 Linux rootfs가 비어 있어서 NFS root 마운트 뒤 init을 찾지 못하는 단계입니다.
+RPi4는 DHCP/TFTP로 커널까지 받는 데 성공했고, `D:\rootfs\d80c0b88`에는 부팅 핵심 rootfs가 준비됐습니다. 현재 다음 단계는 SD카드를 제거하고 실제 NFS root 부팅을 확인하는 것입니다.
 
 ## 반드시 기억할 결정
 
@@ -52,6 +52,12 @@ RPi4는 DHCP/TFTP로 커널까지 받는 데 성공했습니다. 현재 막힌 �
 | 22 | 2026-05-15 | Windows판을 어디에 둘지 결정 | 새 repo를 만들지 않고 기존 `minoTrey/rpi-pxe-manager` 저장소에 `windows/` 폴더로 추가하기로 결정 | Linux판과 Windows판을 같은 repo 안에서 분리 관리 |
 | 23 | 2026-05-15 | rootfs/Zero 2 W 자동화 연결 필요 | main manager에 `prepare-rpi4-rootfs`, `prepare-zero2w-gadget-sd`, `prepare-rpi4-eeprom-sd` task 추가 | GUI/CLI에서 RPi4 netboot와 Zero 2 W gadget 흐름 분리 |
 | 24 | 2026-05-15 | GitHub에 Windows판 기록을 남김 | branch `agent/windows-netboot-manager`, commit `f4d89e0`, draft PR #1 생성 | PR: `https://github.com/minoTrey/rpi-pxe-manager/pull/1` |
+| 25 | 2026-05-15 | RPi4 SD 부팅 확인 | Raspberry Pi OS Lite 64-bit Trixie SD가 `10.73.0.155`에서 SSH open 상태로 부팅됨을 확인 | SD 부팅 OS를 rootfs source로 사용 가능 |
+| 26 | 2026-05-15 | 자동 rootfs import 실패 원인 확인 | Pi 안의 `/boot/firmware/rpi4-netboot-rootfs-import-d80c0b88.log` 확인 | Pi가 인터넷/DNS를 못 써서 `nfs-common` 설치 실패 |
+| 27 | 2026-05-15 | Pi에 NFS client 도구 오프라인 설치 | Windows에서 arm64 `.deb` 5개를 받아 Pi로 복사 후 `dpkg -i` 실행 | `nfs-common`, `rpcbind` 설치 완료, NFS mount/write 성공 |
+| 28 | 2026-05-15 | WinNFSd 대량 쓰기 한계 우회 | `rootfs-helper.ps1`의 rsync 옵션을 `--inplace --whole-file --omit-dir-times` 중심으로 조정하고 개발 헤더/문서류 제외 | rootfs 복제 안정성 개선 |
+| 29 | 2026-05-15 | 깨진 partial rootfs 보존 후 새 rootfs 시작 | `D:\rootfs\d80c0b88`를 `D:\rootfs\d80c0b88.failed-20260515-155755`로 옮기고 새 폴더 생성 | stale handle 찌꺼기 분리 |
+| 30 | 2026-05-15 | RPi4 rootfs 핵심 파일 준비 | `D:\rootfs\d80c0b88`에 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`, `usr\lib\modules` 확인 | SD 없이 재부팅 테스트 대기 |
 
 ## 현재 확정된 장비 값
 
@@ -75,13 +81,15 @@ RPi4는 DHCP/TFTP로 커널까지 받는 데 성공했습니다. 현재 막힌 �
 - RPi4가 TFTP로 커널과 부팅 파일을 받아 커널 로그까지 출력했습니다.
 - 서버 PC 유선 IP와 공유기 주소가 맞습니다.
 - `D:\tftp\d80c0b88`에는 부팅 파일이 들어 있습니다.
+- `D:\rootfs\d80c0b88`에는 NFS root 부팅 핵심 파일이 들어 있습니다.
+- Pi에서 NFS로 rootfs 핵심 파일을 읽는 테스트가 `ROOTFS_NFS_READ_OK`로 통과했습니다.
 - 무료 provider 방향의 DHCP/TFTP/NFS 서비스 구성이 만들어져 있습니다.
 
 ## 현재 막힌 것
 
-가장 중요한 blocker는 `D:\rootfs\d80c0b88`가 비어 있다는 점입니다. 커널이 NFS root를 마운트해도 `/sbin/init`, `/bin/sh`, `/usr`, `/etc` 같은 Linux rootfs 내용이 없으면 부팅할 수 없습니다.
+rootfs empty 문제는 해소됐습니다. 현재 blocker는 아직 SD카드 없는 실제 NFS root 부팅 결과를 확인하지 못했다는 점입니다.
 
-Windows 탐색기로 rootfs를 대충 복사하면 Linux 권한, 소유자, 심볼릭 링크, 특수 파일이 깨질 수 있습니다. rootfs는 Pi 또는 Linux helper에서 `rsync -aHAXx --numeric-ids` 방식으로 채우는 쪽이 안전합니다.
+WinNFSd는 대량 쓰기 중 `Input/output error`, `Stale file handle`가 나올 수 있습니다. 그래서 현재 rootfs helper는 `rsync -aHx --inplace --whole-file --omit-dir-times --numeric-ids`를 사용하고, 부팅에 덜 중요한 개발 헤더/문서류를 제외하는 방향으로 조정했습니다.
 
 추적 도구는 다음 기준으로 붙였습니다. GitHub는 기존 `minoTrey/rpi-pxe-manager` repository를 사용하고, Windows판은 그 안의 `windows/` 폴더로 분리합니다. Linear에는 `RPI Netboot Windows` 프로젝트를 만들었고 남은 작업을 이슈로 쪼갰습니다. 이 문서는 그래도 세션 복구용 원장으로 계속 유지합니다.
 
@@ -90,8 +98,8 @@ Windows 탐색기로 rootfs를 대충 복사하면 Linux 권한, 소유자, 심�
 1. `RPI-Netboot-Manager-Admin-Update.exe`를 관리자 권한으로 실행합니다.
 2. `전체 상태 다시 확인`으로 DHCP/TFTP/NFS 리스너와 rootfs 상태를 확인합니다.
 3. rootfs 준비 기능을 GUI에 연결합니다. 현재 후보 스크립트는 `tools\rootfs-helper.ps1`입니다.
-4. 테스트 RPi4의 실제 rootfs를 `D:\rootfs\d80c0b88`에 채웁니다.
-5. `D:\rootfs\d80c0b88\sbin\init` 또는 `D:\rootfs\d80c0b88\bin\sh`가 있는지 확인합니다.
+4. `D:\rootfs\d80c0b88`에 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`가 있는지 확인합니다.
+5. RPi4가 꺼져 있으면 SD카드를 제거합니다.
 6. RPi4를 SD카드 없이 다시 전원 재연결해서 NFS root 부팅을 확인합니다.
 7. 성공하면 첫 RPi4를 기준 이미지로 삼아 다음 RPi4들을 복제/등록하는 GUI 흐름을 만듭니다.
 8. Zero 2 W용 SD + USB gadget 준비 기능은 별도 버튼으로 분리합니다. 네트워크 부팅 흐름에 섞지 않습니다.

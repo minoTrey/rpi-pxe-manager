@@ -4,9 +4,9 @@
 
 ## 결론
 
-RPi4 네트워크 부팅은 DHCP/TFTP 단계까지 성공했습니다. 커널이 뜬 뒤 NFS rootfs 단계에서 실패하고 있습니다.
+RPi4 네트워크 부팅은 DHCP/TFTP 단계까지 성공했고, 2026-05-15 16:15 KST 기준 `D:\rootfs\d80c0b88`에도 부팅 핵심 rootfs가 들어갔습니다.
 
-현재 가장 중요한 문제는 `D:\rootfs\d80c0b88`가 비어 있다는 점입니다. 이 폴더에 실제 Raspberry Pi OS rootfs가 들어가야 커널 다음 단계로 넘어갑니다.
+다음 관문은 SD카드를 제거한 상태에서 RPi4를 다시 켜서 NFS rootfs로 실제 부팅되는지 확인하는 것입니다.
 
 정책상 네트워크 부팅 대상은 RPi4뿐입니다. Zero 2 W는 SD카드로 부팅하고 USB gadget mode로 붙이는 별도 흐름입니다.
 
@@ -61,14 +61,16 @@ Kernel panic - not syncing: No working init found
 - RPi4가 DHCP 응답을 받았습니다.
 - RPi4가 TFTP로 커널을 받아 실행했습니다.
 - `D:\tftp\d80c0b88`에는 RPi4 부팅 파일이 있습니다.
+- `D:\rootfs\d80c0b88`에는 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`, `usr\lib\modules`, `etc\fstab`가 있습니다.
+- Pi에서 NFS로 `10.73.0.10:/rpi/d80c0b88`를 읽는 테스트가 `ROOTFS_NFS_READ_OK`로 통과했습니다.
 
 ## 현재 필요한 것
 
-1. `D:\rootfs\d80c0b88`에 실제 Linux rootfs를 채워야 합니다.
-2. rootfs 안에 최소한 `sbin\init` 또는 `bin\sh`가 있어야 합니다.
-3. rootfs 복제는 Windows 탐색기 복사가 아니라 Pi/Linux helper의 `rsync` 방식으로 하는 것이 안전합니다.
-4. rootfs가 준비된 뒤 RPi4를 SD카드 없이 다시 켜서 NFS root 부팅을 확인합니다.
-5. rootfs 준비 기능을 GUI 버튼과 상태 점검에 연결해야 합니다.
+1. RPi4 전원이 완전히 꺼진 뒤 SD카드를 제거합니다.
+2. SD 없이 전원을 다시 넣어 NFS root 부팅을 확인합니다.
+3. 성공하면 `D:\rootfs\d80c0b88`를 첫 기준 rootfs로 삼습니다.
+4. 실패하면 화면 메시지와 `D:\logs\rpi-boot-lite.log`를 기준으로 NFS mount 이후 단계를 다시 확인합니다.
+5. rootfs 준비 기능을 GUI 버튼과 상태 점검에 더 친절하게 연결해야 합니다.
 6. Zero 2 W SD + USB gadget 준비 기능은 RPi4 netboot 흐름과 분리해야 합니다.
 
 ## 추적 도구 상태
@@ -84,12 +86,12 @@ Kernel panic - not syncing: No working init found
 1. `RPI-Netboot-Manager-Admin-Update.exe`를 관리자 권한으로 실행합니다.
 2. `전체 상태 다시 확인`을 누릅니다.
 3. DHCP/TFTP/NFS/Portmapper가 정상인지 봅니다.
-4. `D:\rootfs\d80c0b88`가 비어 있는지 봅니다.
-5. rootfs 준비 기능을 실행하거나, Linux helper에서 `D:\rootfs\d80c0b88`로 rootfs를 복제합니다.
-6. `D:\rootfs\d80c0b88\sbin\init` 또는 `D:\rootfs\d80c0b88\bin\sh`가 생겼는지 확인합니다.
-7. RPi4 전원을 껐다 켭니다.
+4. `D:\rootfs\d80c0b88`에 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`가 있는지 봅니다.
+5. RPi4 전원이 꺼져 있으면 SD카드를 제거합니다.
+6. SD 없이 RPi4 전원을 다시 넣습니다.
+7. 화면에서 NFS root 부팅 또는 새 오류 메시지를 확인합니다.
 8. Zero 2 W는 이 테스트에 포함하지 말고, 별도 SD + USB gadget 테스트로 진행합니다.
 
 ## 헷갈리면 이것만 기억
 
-지금은 “RPi4가 서버를 못 찾는 문제”가 아닙니다. RPi4는 서버를 찾았고 커널도 받았습니다. 남은 일은 서버가 RPi4에게 실제 Linux rootfs를 제공하게 만드는 것입니다.
+지금은 “RPi4가 서버를 못 찾는 문제”가 아닙니다. RPi4는 서버를 찾았고 커널도 받았습니다. rootfs 핵심 파일도 준비됐으므로, 남은 일은 SD 없이 실제 NFS root 부팅이 되는지 확인하는 것입니다.
