@@ -6,7 +6,7 @@
 
 RPi4 네트워크 부팅은 DHCP/TFTP 단계까지 성공했고, 2026-05-15 16:15 KST 기준 `D:\rootfs\d80c0b88`에도 부팅 핵심 rootfs가 들어갔습니다.
 
-다음 관문은 SD카드를 제거한 상태에서 RPi4를 다시 켜서 NFS rootfs로 실제 부팅되는지 확인하는 것입니다.
+SD카드를 제거한 상태에서 RPi4를 다시 켰고, NFS root mount까지는 성공했습니다. 현재 관문은 `init` 실행 단계의 `error -14`입니다.
 
 정책상 네트워크 부팅 대상은 RPi4뿐입니다. Zero 2 W는 SD카드로 부팅하고 USB gadget mode로 붙이는 별도 흐름입니다.
 
@@ -32,7 +32,7 @@ IP-Config: Got DHCP answer from 10.73.0.10, my address is 10.73.0.155
 bootserver=10.73.0.10, rootserver=10.73.0.10
 ```
 
-부팅 실패는 다음 메시지로 나타났습니다.
+초기 부팅 실패는 다음 메시지로 나타났습니다.
 
 ```text
 VFS: Unable to mount root fs via NFS
@@ -40,6 +40,21 @@ Kernel panic - not syncing: No working init found
 ```
 
 이 메시지는 부팅 파일 전달보다 뒤 단계의 문제입니다. 즉, DHCP/TFTP는 지나갔고 NFS/rootfs 단계가 현재 관문입니다.
+
+rootfs를 채운 뒤의 최신 실패는 다음 메시지입니다.
+
+```text
+VFS: Mounted root (nfs filesystem) on device 0:19.
+Starting init: /sbin/init exists but couldn't execute it (error -14)
+Starting init: /bin/sh exists but couldn't execute it (error -14)
+Kernel panic - not syncing: No working init found.
+```
+
+`init=/usr/sbin/init`를 직접 지정하고 symlink를 실제 파일로 바꾼 뒤에도 다음 오류가 재현됐습니다.
+
+```text
+Kernel panic - not syncing: Requested init /usr/sbin/init failed (error -14)
+```
 
 ## 마지막으로 확인된 서비스 상태
 
@@ -63,14 +78,16 @@ Kernel panic - not syncing: No working init found
 - `D:\tftp\d80c0b88`에는 RPi4 부팅 파일이 있습니다.
 - `D:\rootfs\d80c0b88`에는 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`, `usr\lib\modules`, `etc\fstab`가 있습니다.
 - Pi에서 NFS로 `10.73.0.10:/rpi/d80c0b88`를 읽는 테스트가 `ROOTFS_NFS_READ_OK`로 통과했습니다.
+- SD 없는 부팅에서도 NFS root mount는 성공했습니다.
+- WinNFSd 로그에서 커널이 `systemd`, ELF loader, `dash`를 읽은 것을 확인했습니다.
 
 ## 현재 필요한 것
 
-1. RPi4 전원이 완전히 꺼진 뒤 SD카드를 제거합니다.
-2. SD 없이 전원을 다시 넣어 NFS root 부팅을 확인합니다.
-3. 성공하면 `D:\rootfs\d80c0b88`를 첫 기준 rootfs로 삼습니다.
-4. 실패하면 화면 메시지와 `D:\logs\rpi-boot-lite.log`를 기준으로 NFS mount 이후 단계를 다시 확인합니다.
-5. rootfs 준비 기능을 GUI 버튼과 상태 점검에 더 친절하게 연결해야 합니다.
+1. 현재 `error -14`가 TFTP boot 파일과 rootfs OS 세트 불일치 때문인지 확인합니다.
+2. Raspberry Pi OS 이미지의 FAT32 bootfs를 추출해 `D:\tftp\d80c0b88`를 같은 OS 세트로 맞춥니다.
+3. `cmdline.txt`는 NFS root용으로 유지합니다.
+4. SD 없이 다시 부팅해 `init` 실행이 되는지 확인합니다.
+5. rootfs 준비 기능과 bootfs 동기화 기능을 GUI 버튼과 상태 점검에 더 친절하게 연결해야 합니다.
 6. Zero 2 W SD + USB gadget 준비 기능은 RPi4 netboot 흐름과 분리해야 합니다.
 
 ## 추적 도구 상태
@@ -87,11 +104,11 @@ Kernel panic - not syncing: No working init found
 2. `전체 상태 다시 확인`을 누릅니다.
 3. DHCP/TFTP/NFS/Portmapper가 정상인지 봅니다.
 4. `D:\rootfs\d80c0b88`에 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`가 있는지 봅니다.
-5. RPi4 전원이 꺼져 있으면 SD카드를 제거합니다.
+5. TFTP boot 파일을 rootfs와 같은 Raspberry Pi OS 이미지 세트로 맞춥니다.
 6. SD 없이 RPi4 전원을 다시 넣습니다.
-7. 화면에서 NFS root 부팅 또는 새 오류 메시지를 확인합니다.
+7. 화면에서 `error -14`가 사라졌는지 확인합니다.
 8. Zero 2 W는 이 테스트에 포함하지 말고, 별도 SD + USB gadget 테스트로 진행합니다.
 
 ## 헷갈리면 이것만 기억
 
-지금은 “RPi4가 서버를 못 찾는 문제”가 아닙니다. RPi4는 서버를 찾았고 커널도 받았습니다. rootfs 핵심 파일도 준비됐으므로, 남은 일은 SD 없이 실제 NFS root 부팅이 되는지 확인하는 것입니다.
+지금은 “RPi4가 서버를 못 찾는 문제”가 아닙니다. RPi4는 서버를 찾았고 커널도 받았고 NFS root도 마운트했습니다. 남은 일은 `init` 실행 실패 `error -14`를 해결하는 것입니다.

@@ -345,3 +345,55 @@ WinNFSd는 대량 rootfs 쓰기 중 `Input/output error`와 `Stale file handle`�
 2. SD카드를 제거합니다.
 3. SD 없이 전원을 다시 넣습니다.
 4. 화면에 나오는 새 메시지와 `D:\logs\rpi-boot-lite.log`를 같이 확인합니다.
+
+## 2026-05-15 16:18-16:33 SD 없는 NFS root 부팅 1차/2차 테스트
+
+SD카드를 제거한 상태에서 RPi4를 다시 켰습니다. 결과적으로 예전보다 한 단계 더 진행했습니다.
+
+새로 확인된 성공 지점:
+
+- TFTP로 `config.txt`, `cmdline.txt`, `kernel8.img`, `bcm2711-rpi-4-b.dtb`를 다시 받아갔습니다.
+- 커널에서 DHCP를 다시 받아 `10.73.0.155`로 올라왔습니다.
+- 화면에 `VFS: Mounted root (nfs filesystem) on device 0:19.`가 표시됐습니다.
+- WinNFSd 로그에서 커널이 `D:\rootfs\d80c0b88\usr\lib\systemd\systemd`, `ld-linux-aarch64.so.1`, `dash`를 실제로 읽은 것을 확인했습니다.
+
+새로 확인된 실패 지점:
+
+```text
+Starting init: /sbin/init exists but couldn't execute it (error -14)
+Starting init: /bin/sh exists but couldn't execute it (error -14)
+Kernel panic - not syncing: No working init found.
+```
+
+이후 `/sbin` symlink 우회 여부를 확인하기 위해 `D:\tftp\d80c0b88\cmdline.txt`에 다음을 추가했습니다.
+
+```text
+init=/usr/sbin/init
+```
+
+그리고 rootfs 안의 부팅 핵심 symlink 3개를 실제 파일로 평탄화했습니다.
+
+- `D:\rootfs\d80c0b88\usr\sbin\init`: `usr\lib\systemd\systemd`의 실제 파일 복사본
+- `D:\rootfs\d80c0b88\usr\bin\sh`: `usr\bin\dash`의 실제 파일 복사본
+- `D:\rootfs\d80c0b88\usr\lib\ld-linux-aarch64.so.1`: `usr\lib\aarch64-linux-gnu\ld-linux-aarch64.so.1`의 실제 파일 복사본
+
+2차 테스트에서도 화면에 다음 오류가 표시됐습니다.
+
+```text
+Run /usr/sbin/init as init process
+Kernel panic - not syncing: Requested init /usr/sbin/init failed (error -14)
+```
+
+현재 판단:
+
+- NFS root mount 자체는 성공했습니다.
+- rootfs empty 문제는 해결됐습니다.
+- 남은 문제는 커널이 NFS/WinNFSd/NTFS 위의 ELF 실행 파일을 `execve` 단계에서 정상 실행하지 못하는 것입니다.
+- 다음 후보는 TFTP 커널/DTB/overlays와 rootfs OS 세트 불일치입니다. SD로 부팅한 OS는 `6.12.75+rpt-rpi-v8` 모듈을 갖고 있는데, 현재 TFTP boot 파일은 이전에 따로 복사된 세트입니다.
+
+다음 실험:
+
+1. Raspberry Pi OS 이미지의 FAT32 bootfs를 추출합니다.
+2. 같은 OS 세트의 `kernel8.img`, DTB, overlays, firmware 파일을 `D:\tftp\d80c0b88`로 동기화합니다.
+3. `cmdline.txt`는 NFS root용으로 유지합니다.
+4. SD 없이 다시 부팅해 `error -14`가 사라지는지 확인합니다.
