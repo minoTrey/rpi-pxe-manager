@@ -78,6 +78,8 @@ console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=10.73.0.10:/rpi/<seria
 4. NFS mount 단계까지 가는지
 5. rootfs 내부 `/etc/fstab`, hostname, SSH 설정이 맞는지
 
+2026-05-15 기준으로 공식 Raspberry Pi OS bootfs를 사용한 재시험에서 Pi가 `kernel8.img` 9,695,883 bytes와 `initramfs8` 16,040,912 bytes를 TFTP로 수신했지만 `/usr/sbin/init failed (error -14)`가 재현됐다. 이 경우 DHCP/TFTP 문제로 보지 말고 NFS root 위 ELF 실행, WinNFSd/NTFS provider, rootfs 파일 속성/링크 보존 문제를 먼저 의심한다.
+
 첫 번째 Pi가 SSH까지 안정적으로 들어오면 그 rootfs를 golden template로 삼아 다음 Pi들을 복제한다.
 
 주의: haneWIN은 30일 평가판 제약이 있는 빠른 비교용 provider다. 기본 테스트는 무료 Lite provider를 기준으로 한다.

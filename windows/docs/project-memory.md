@@ -6,7 +6,7 @@
 
 ## 현재 한 줄 상태
 
-RPi4는 DHCP/TFTP로 커널까지 받는 데 성공했고, `D:\rootfs\d80c0b88`에는 부팅 핵심 rootfs가 준비됐습니다. 현재 다음 단계는 SD카드를 제거하고 실제 NFS root 부팅을 확인하는 것입니다.
+RPi4는 DHCP/TFTP, 공식 bootfs 수신, NFS root mount까지 성공했습니다. `D:\rootfs\d80c0b88`에는 부팅 핵심 rootfs가 준비됐지만, 현재는 `/usr/sbin/init` 실행 단계에서 `error -14`가 재현됩니다. 지금은 static busybox init 진단 모드가 적용되어 있고 Pi 재부팅 결과를 기다립니다.
 
 ## 반드시 기억할 결정
 
@@ -58,6 +58,8 @@ RPi4는 DHCP/TFTP로 커널까지 받는 데 성공했고, `D:\rootfs\d80c0b88`�
 | 28 | 2026-05-15 | WinNFSd 대량 쓰기 한계 우회 | `rootfs-helper.ps1`의 rsync 옵션을 `--inplace --whole-file --omit-dir-times` 중심으로 조정하고 개발 헤더/문서류 제외 | rootfs 복제 안정성 개선 |
 | 29 | 2026-05-15 | 깨진 partial rootfs 보존 후 새 rootfs 시작 | `D:\rootfs\d80c0b88`를 `D:\rootfs\d80c0b88.failed-20260515-155755`로 옮기고 새 폴더 생성 | stale handle 찌꺼기 분리 |
 | 30 | 2026-05-15 | RPi4 rootfs 핵심 파일 준비 | `D:\rootfs\d80c0b88`에 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`, `usr\lib\modules` 확인 | SD 없이 재부팅 테스트 대기 |
+| 31 | 2026-05-15 | 공식 Raspberry Pi OS bootfs로 재시험 | `D:\tftp\d80c0b88` 동기화 후 Pi가 `kernel8.img` 9,695,883 bytes와 `initramfs8` 16,040,912 bytes 수신 | `error -14` 재현, boot/root OS 세트 불일치 단독 원인 가능성 낮아짐 |
+| 32 | 2026-05-15 | static busybox init 진단 적용 | `windows\tools\init-diagnostic.ps1` 추가, 원래 systemd init 백업 후 Debian arm64 static busybox를 임시 init으로 설치 | Pi 재부팅 결과 대기 |
 
 ## 현재 확정된 장비 값
 
@@ -84,12 +86,15 @@ RPi4는 DHCP/TFTP로 커널까지 받는 데 성공했고, `D:\rootfs\d80c0b88`�
 - `D:\rootfs\d80c0b88`에는 NFS root 부팅 핵심 파일이 들어 있습니다.
 - Pi에서 NFS로 rootfs 핵심 파일을 읽는 테스트가 `ROOTFS_NFS_READ_OK`로 통과했습니다.
 - 무료 provider 방향의 DHCP/TFTP/NFS 서비스 구성이 만들어져 있습니다.
+- 공식 Raspberry Pi OS bootfs를 TFTP로 제공했고 Pi가 새 `kernel8.img`와 `initramfs8`를 수신했습니다.
+- SD 없는 부팅에서 NFS root mount는 성공했습니다.
+- static busybox init 진단이 적용됐고 원래 systemd init은 `D:\rootfs\d80c0b88\usr\sbin\init.systemd-before-busybox`에 백업됐습니다.
 
 ## 현재 막힌 것
 
-rootfs empty 문제는 해소됐습니다. 현재 blocker는 아직 SD카드 없는 실제 NFS root 부팅 결과를 확인하지 못했다는 점입니다.
+rootfs empty 문제와 bootfs 세트 불일치 가능성은 대부분 해소됐습니다. 현재 blocker는 NFS root mount 이후 `/usr/sbin/init` 실행이 `error -14`로 실패하는 점입니다.
 
-WinNFSd는 대량 쓰기 중 `Input/output error`, `Stale file handle`가 나올 수 있습니다. 그래서 현재 rootfs helper는 `rsync -aHx --inplace --whole-file --omit-dir-times --numeric-ids`를 사용하고, 부팅에 덜 중요한 개발 헤더/문서류를 제외하는 방향으로 조정했습니다.
+WinNFSd는 대량 쓰기 중 `Input/output error`, `Stale file handle`가 나올 수 있습니다. 그래서 현재 rootfs helper는 `rsync -aHx --inplace --whole-file --omit-dir-times --numeric-ids`를 사용하고, 부팅에 덜 중요한 개발 헤더/문서류를 제외하는 방향으로 조정했습니다. 다만 현재 `error -14`는 WinNFSd/NTFS 위의 Linux ELF 실행 또는 rootfs 메타데이터 표현 문제일 가능성이 커졌습니다.
 
 추적 도구는 다음 기준으로 붙였습니다. GitHub는 기존 `minoTrey/rpi-pxe-manager` repository를 사용하고, Windows판은 그 안의 `windows/` 폴더로 분리합니다. Linear에는 `RPI Netboot Windows` 프로젝트를 만들었고 남은 작업을 이슈로 쪼갰습니다. 이 문서는 그래도 세션 복구용 원장으로 계속 유지합니다.
 
@@ -99,8 +104,8 @@ WinNFSd는 대량 쓰기 중 `Input/output error`, `Stale file handle`가 나올
 2. `전체 상태 다시 확인`으로 DHCP/TFTP/NFS 리스너와 rootfs 상태를 확인합니다.
 3. rootfs 준비 기능을 GUI에 연결합니다. 현재 후보 스크립트는 `tools\rootfs-helper.ps1`입니다.
 4. `D:\rootfs\d80c0b88`에 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`가 있는지 확인합니다.
-5. RPi4가 꺼져 있으면 SD카드를 제거합니다.
-6. RPi4를 SD카드 없이 다시 전원 재연결해서 NFS root 부팅을 확인합니다.
+5. Linux NFS server 또는 static busybox init으로 `error -14` 원인을 분리합니다.
+6. busybox도 `error -14`면 WinNFSd provider를 운영 후보에서 낮추고 bridged Linux VM/WSL/서버 provider를 GUI에 분리합니다.
 7. 성공하면 첫 RPi4를 기준 이미지로 삼아 다음 RPi4들을 복제/등록하는 GUI 흐름을 만듭니다.
 8. Zero 2 W용 SD + USB gadget 준비 기능은 별도 버튼으로 분리합니다. 네트워크 부팅 흐름에 섞지 않습니다.
 9. GitHub `minoTrey/rpi-pxe-manager`의 Windows branch에 변경을 commit/push하고, Linear 이슈에 진행 상황을 남깁니다.

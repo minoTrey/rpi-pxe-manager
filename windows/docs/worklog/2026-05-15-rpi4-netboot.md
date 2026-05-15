@@ -397,3 +397,71 @@ Kernel panic - not syncing: Requested init /usr/sbin/init failed (error -14)
 2. 같은 OS 세트의 `kernel8.img`, DTB, overlays, firmware 파일을 `D:\tftp\d80c0b88`로 동기화합니다.
 3. `cmdline.txt`는 NFS root용으로 유지합니다.
 4. SD 없이 다시 부팅해 `error -14`가 사라지는지 확인합니다.
+
+## 2026-05-15 16:52-17:05 공식 bootfs 동기화 후 재시험
+
+서버 PC에 7-Zip 설치가 확인됐고, 공식 Raspberry Pi OS Lite 64-bit Trixie 이미지에서 FAT32 boot partition을 추출했습니다.
+
+- 7-Zip: `C:\Program Files\7-Zip\7z.exe`
+- 원본 이미지: `D:\downloads\2026-04-21-raspios-trixie-arm64-lite.img`
+- bootfs 추출 위치: `D:\downloads\rpios-trixie-bootfs-files`
+- 기존 TFTP 백업: `D:\tftp\d80c0b88.backup-20260515-165210`
+- 새 TFTP 위치: `D:\tftp\d80c0b88`
+
+`D:\tftp\d80c0b88`는 공식 bootfs 파일 세트로 동기화했고, `cmdline.txt`만 NFS root용으로 다시 작성했습니다.
+
+```text
+console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=10.73.0.10:/rpi/d80c0b88,vers=3,tcp rw ip=dhcp rootwait elevator=deadline init=/usr/sbin/init
+```
+
+새 부팅 로그에서 RPi4가 공식 bootfs 파일을 실제로 받아간 것을 확인했습니다.
+
+```text
+TFTP GET d80c0b88/kernel8.img bytes=9695883
+TFTP GET d80c0b88/initramfs8 bytes=16040912
+TFTP GET d80c0b88/bcm2711-rpi-4-b.dtb bytes=56249
+TFTP GET d80c0b88/config.txt bytes=1247
+```
+
+하지만 화면에는 같은 계열의 오류가 재현됐습니다.
+
+```text
+Kernel panic - not syncing: Requested init /usr/sbin/init failed (error -14)
+```
+
+따라서 TFTP boot 파일과 rootfs OS 세트 불일치만으로는 현재 문제를 설명하기 어렵습니다. DHCP, TFTP, 공식 bootfs 수신, NFS root mount까지는 통과했고, 남은 관문은 NFS root 위의 ELF 실행입니다.
+
+다음 조사 축은 다음 순서입니다.
+
+1. `error -14`는 Linux errno 기준 `EFAULT`이므로 단순 파일 없음이나 chmod 문제보다는 ELF loader, 파일 매핑, NFS server가 보여주는 파일 표현 문제를 먼저 의심합니다.
+2. WinNFSd/NTFS export 위에서 `systemd`, `ld-linux-aarch64.so.1`, `dash`가 정상적인 Linux rootfs처럼 보이는지 확인합니다.
+3. 같은 rootfs를 Linux NFS server, 가능하면 bridged Linux VM의 `nfs-kernel-server`, 에서 export해 provider 문제인지 rootfs 내용 문제인지 분리합니다.
+4. 필요하면 static busybox init으로 동적 linker 경로를 우회해 `exec` 자체가 가능한지 분리 테스트합니다.
+
+## 2026-05-15 17:18-17:29 static busybox init 진단 준비
+
+`error -14`가 systemd 또는 동적 linker 체인에서만 나는지, 아니면 WinNFSd/NTFS 위 NFS root의 ELF 실행 자체가 깨지는지 분리하기 위해 static busybox 진단 스크립트를 추가했습니다.
+
+- 스크립트: `windows\tools\init-diagnostic.ps1`
+- Debian package index: `https://deb.debian.org/debian/dists/trixie/main/binary-arm64/Packages.xz`
+- busybox package: `busybox-static_1.37.0-6+b7_arm64.deb`
+- package SHA256: `dbddaf497c4bb5ac03c74dfcbd38ed2c81a69c139786ddc8c104e3b8eaaa3644`
+
+진단 적용 상태:
+
+- 원래 systemd init 백업: `D:\rootfs\d80c0b88\usr\sbin\init.systemd-before-busybox`
+- 현재 임시 init: Debian arm64 static busybox
+- 현재 busybox init SHA256: `43DB2F47D9EA4E6CCF02A261A0AB00AFB4490EED2D89730E089EACD65DEA2273`
+- 원래 systemd init SHA256: `767349E32B1F2B67C5C1BEC5A49D031B8AD639DDD9AF2514C05C5176C1511882`
+- 복원 명령:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\init-diagnostic.ps1 -Command restore -Config .\windows\lab-10.73.json -Serial d80c0b88
+```
+
+17:24-17:28 KST 동안 로그를 감시했지만 새 TFTP 요청은 들어오지 않았습니다. 따라서 busybox 진단 적용 뒤의 Pi 재부팅 결과는 아직 미확인입니다.
+
+다음 물리 작업은 SD카드가 빠진 상태에서 RPi4 전원을 완전히 뺐다가 다시 넣는 것입니다. 결과 해석은 다음과 같습니다.
+
+- 같은 `error -14`: WinNFSd/NTFS provider가 NFS root 위 ELF 실행에 부적합할 가능성이 매우 큽니다.
+- busybox 메시지 또는 다른 panic: ELF 실행 자체는 됐고, systemd/동적 linker/rootfs 구성 문제로 좁힙니다.
