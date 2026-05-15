@@ -51,6 +51,7 @@ RPi4는 DHCP/TFTP로 커널까지 받는 데 성공했습니다. 현재 막힌 �
 | 21 | 2026-05-15 | GitHub/Linear를 활용해 작업을 추적하고 싶음 | GitHub connector에서 기존 `minoTrey/rpi-pxe-manager` repo를 확인하고, Linear 프로젝트 `RPI Netboot Windows`를 생성 | 작업 추적을 GitHub + Linear + repo 문서 조합으로 전환 |
 | 22 | 2026-05-15 | Windows판을 어디에 둘지 결정 | 새 repo를 만들지 않고 기존 `minoTrey/rpi-pxe-manager` 저장소에 `windows/` 폴더로 추가하기로 결정 | Linux판과 Windows판을 같은 repo 안에서 분리 관리 |
 | 23 | 2026-05-15 | rootfs/Zero 2 W 자동화 연결 필요 | main manager에 `prepare-rpi4-rootfs`, `prepare-zero2w-gadget-sd`, `prepare-rpi4-eeprom-sd` task 추가 | GUI/CLI에서 RPi4 netboot와 Zero 2 W gadget 흐름 분리 |
+| 24 | 2026-05-15 | GitHub에 Windows판 기록을 남김 | branch `agent/windows-netboot-manager`, commit `f4d89e0`, draft PR #1 생성 | PR: `https://github.com/minoTrey/rpi-pxe-manager/pull/1` |
 
 ## 현재 확정된 장비 값
 
@@ -103,7 +104,9 @@ Windows 탐색기로 rootfs를 대충 복사하면 Linux 권한, 소유자, 심�
 - 중요한 방향 결정은 `docs/decisions/ADR-번호-주제.md`에 남깁니다.
 - GitHub repository: `minoTrey/rpi-pxe-manager`
 - Windows판 위치: `windows/`
-- GitHub branch 후보: `agent/windows-netboot-manager`
+- GitHub branch: `agent/windows-netboot-manager`
+- GitHub draft PR: `https://github.com/minoTrey/rpi-pxe-manager/pull/1`
+- First Windows commit: `f4d89e0`
 - Linear project: `RPI Netboot Windows`
 - Linear issues:
   - `3D-5`: P0 rootfs 채우기

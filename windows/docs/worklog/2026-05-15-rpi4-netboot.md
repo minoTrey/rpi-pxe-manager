@@ -11,6 +11,8 @@ RPi4 네트워크 부팅이 실제로 어디까지 됐는지 확인하고, Windo
 - GitHub repository: `minoTrey/rpi-pxe-manager`
 - Windows판 위치: `windows/`
 - 작업 branch: `agent/windows-netboot-manager`
+- Draft PR: `https://github.com/minoTrey/rpi-pxe-manager/pull/1`
+- First Windows commit: `f4d89e0`
 - Linear project: `RPI Netboot Windows`
 - Linear issue `3D-5`: P0 rootfs 채우기
 - Linear issue `3D-6`: rootfs 준비를 Windows manager/GUI에 연결
@@ -222,6 +224,25 @@ GUI에는 다음 버튼이 추가됐습니다.
 - `rootfs-helper.ps1 make-script` 실행 성공
 - 생성 파일: `D:\downloads\rpi4-rootfs-import-d80c0b88.sh`
 - 생성 파일: `D:\downloads\rpi4-rootfs-import-d80c0b88.txt`
+
+### 13. GitHub PR 생성
+
+기존 `minoTrey/rpi-pxe-manager` repo에서 branch `agent/windows-netboot-manager`를 만들고 Windows판을 `windows/` 폴더로 추가했습니다.
+
+생성된 GitHub 기록:
+
+- Commit: `f4d89e0 Add Windows netboot manager`
+- Draft PR: `https://github.com/minoTrey/rpi-pxe-manager/pull/1`
+
+PR에는 다음 내용을 포함했습니다.
+
+- Linux판은 repo root 유지
+- Windows판은 `windows/` 하위에 추가
+- RPi4만 netboot 대상
+- Zero 2 W는 SD boot + USB gadget
+- P0 blocker는 `D:\rootfs\d80c0b88`가 비어 있는 것
+
+주의: 최초 커밋 후 생성된 rootfs helper bash 기본값 버그를 고쳤습니다. `SERVER_IP`, `NFS_ALIAS`, `CLIENT_SERIAL`이 빈 문자열로 생성되지 않도록 PowerShell here-string escaping을 수정했습니다.
 
 ### 11. GitHub/Linear 운영 방침 확인
 

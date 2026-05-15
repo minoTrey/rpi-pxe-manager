@@ -19,6 +19,8 @@
 - GitHub repository: `minoTrey/rpi-pxe-manager`
 - Windows판 위치: `windows/`
 - Linux판 위치: 기존 repo root
+- GitHub branch: `agent/windows-netboot-manager`
+- Draft PR: `https://github.com/minoTrey/rpi-pxe-manager/pull/1`
 - Linear project: `RPI Netboot Windows`
 - Linear issues:
   - `3D-5`: P0 rootfs 채우기

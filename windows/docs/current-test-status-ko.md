@@ -75,6 +75,7 @@ Kernel panic - not syncing: No working init found
 
 - GitHub는 기존 `minoTrey/rpi-pxe-manager` repository를 사용합니다.
 - Windows판은 해당 repo의 `windows/` 폴더로 분리합니다.
+- GitHub draft PR: `https://github.com/minoTrey/rpi-pxe-manager/pull/1`
 - Linear project `RPI Netboot Windows`를 만들었고, 남은 작업은 `3D-5`부터 `3D-8`까지 이슈로 기록했습니다.
 - 이 문서는 그래도 실제 장비 테스트 상태의 기준 원장으로 유지합니다.
 
