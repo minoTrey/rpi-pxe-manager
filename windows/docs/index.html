@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RPI 네트워크 부팅 관리자 가이드</title>
+  <style>
+    :root {
+      --bg: #f5f7f8;
+      --surface: #ffffff;
+      --ink: #17211d;
+      --muted: #5f6a65;
+      --line: #d9e0dc;
+      --primary: #0f766e;
+      --primary-ink: #ffffff;
+      --soft: #e0f2ef;
+      --warn: #b86f1d;
+      --danger: #b42318;
+      --dark: #18221f;
+      --dark-muted: #b3c0ba;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.6 "Segoe UI", "Malgun Gothic", Arial, sans-serif;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+    }
+
+    aside {
+      background: var(--dark);
+      color: white;
+      padding: 28px 24px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .brand {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .mark {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: var(--primary);
+      display: grid;
+      place-items: center;
+    }
+
+    .mark svg { width: 30px; height: 30px; }
+    .brand h1 { margin: 0; font-size: 23px; line-height: 1.1; }
+    .brand p { margin: 4px 0 0; color: var(--dark-muted); font-size: 13px; }
+
+    nav {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav-button {
+      width: 100%;
+      min-height: 46px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #d9e4df;
+      text-align: left;
+      padding: 10px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .nav-button[aria-current="page"] {
+      background: #264640;
+      color: white;
+      outline: 2px solid #e5c45c;
+    }
+
+    .side-note {
+      margin-top: auto;
+      border: 1px solid #3c4c46;
+      border-radius: 8px;
+      padding: 14px;
+      color: var(--dark-muted);
+      font-size: 14px;
+    }
+
+    main {
+      padding: 36px clamp(24px, 5vw, 64px);
+      max-width: 1180px;
+      width: 100%;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 28px;
+    }
+
+    .eyebrow {
+      color: var(--primary);
+      font-weight: 800;
+      letter-spacing: 0;
+      margin: 0 0 8px;
+    }
+
+    h2 {
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.12;
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      color: var(--muted);
+      margin: 14px 0 0;
+      font-size: 17px;
+    }
+
+    .status-pill {
+      flex: 0 0 auto;
+      background: var(--soft);
+      color: var(--primary);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-weight: 800;
+      min-width: 152px;
+      text-align: center;
+    }
+
+    .page {
+      display: none;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin: 24px 0;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      min-height: 132px;
+    }
+
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+    }
+
+    .card p { margin: 0; color: var(--muted); }
+
+    .callout {
+      background: #fff8ed;
+      border: 1px solid #ead3ae;
+      border-radius: 8px;
+      padding: 18px;
+      margin: 22px 0;
+    }
+
+    .callout strong { color: var(--warn); }
+
+    .checklist {
+      display: grid;
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .check {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+
+    .tag {
+      align-self: start;
+      border-radius: 999px;
+      padding: 4px 10px;
+      text-align: center;
+      font-weight: 800;
+      font-size: 13px;
+      background: var(--soft);
+      color: var(--primary);
+    }
+
+    .tag.need { background: #fff3d7; color: var(--warn); }
+    .tag.warn { background: #fee4e2; color: var(--danger); }
+
+    code {
+      background: #edf2ef;
+      border-radius: 6px;
+      padding: 2px 6px;
+      font-family: Consolas, monospace;
+    }
+
+    .pager {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      border-top: 1px solid var(--line);
+      margin-top: 34px;
+      padding-top: 18px;
+    }
+
+    .pager button {
+      min-height: 48px;
+      border: 0;
+      border-radius: 8px;
+      padding: 0 18px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .primary { background: var(--primary); color: var(--primary-ink); }
+    .secondary { background: #e9efeb; color: var(--ink); }
+    .page-count { color: var(--muted); font-weight: 700; }
+
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; }
+      aside {
+        position: static;
+        height: auto;
+      }
+      nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid { grid-template-columns: 1fr; }
+      .topbar { flex-direction: column; }
+      .status-pill { width: 100%; }
+    }
+
+    @media print {
+      aside, .pager { display: none; }
+      .shell { display: block; }
+      .page { display: block; page-break-after: always; }
+      main { max-width: none; padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="brand">
+        <div class="mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none" stroke="white" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="7" y="10" width="18" height="12"></rect>
+            <path d="M16 22v5M11 27h10"></path>
+            <path d="M9 6h3M20 6h3M16 4v4"></path>
+          </svg>
+        </div>
+        <div>
+          <h1>RPI Netboot</h1>
+          <p>Windows 서버 가이드</p>
+        </div>
+      </div>
+      <nav id="nav" aria-label="문서 페이지"></nav>
+      <div class="side-note">
+        기준 환경<br>
+        서버 PC <code>10.73.0.10</code><br>
+        공유기 <code>10.73.0.1</code><br>
+        저장소 <code>D:\</code>
+      </div>
+    </aside>
+
+    <main>
+      <section class="page active" data-title="개요">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">처음 보는 사람용</p>
+            <h2>라즈베리파이를 SD카드 없이 켜기 위한 Windows 서버 준비</h2>
+            <p class="subtitle">이 프로그램은 서버 PC, 저장소, SD EEPROM 준비, 부팅 서비스 점검을 버튼으로 처리하게 만든 도구입니다.</p>
+          </div>
+          <div class="status-pill">현재: 준비 중</div>
+        </div>
+        <div class="grid">
+          <div class="card"><h3>서버 PC</h3><p>유선 이더넷을 <code>10.73.0.10</code>으로 두고 Pi 부팅망을 담당합니다.</p></div>
+          <div class="card"><h3>저장소</h3><p><code>D:\tftp</code>에는 부팅 파일, <code>D:\rootfs</code>에는 Pi별 Linux 파일시스템을 둡니다.</p></div>
+          <div class="card"><h3>Pi 4</h3><p>처음 한 번 EEPROM을 네트워크 부팅 가능 상태로 바꿔야 합니다.</p></div>
+        </div>
+        <div class="callout"><strong>지금 바로 부팅 완료 상태는 아닙니다.</strong> PC/IP/폴더와 DHCP/TFTP 흐름은 확인됐고, 현재 핵심 blocker는 첫 RPi4의 <code>D:\rootfs\d80c0b88</code>를 실제 Linux rootfs로 채우는 일입니다.</div>
+      </section>
+
+      <section class="page" data-title="부팅 서비스 설명">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">용어 정리</p>
+            <h2>haneWIN은 내가 만든 이름이 아니라 Windows용 서버 제품군입니다</h2>
+            <p class="subtitle">Windows에서 Raspberry Pi 네트워크 부팅에 필요한 DHCP, TFTP, NFS 역할을 제공하는 후보 도구입니다.</p>
+          </div>
+          <div class="status-pill">제품명</div>
+        </div>
+        <div class="checklist">
+          <div class="check"><span class="tag">DHCP</span><div>Pi에게 IP와 부팅 서버 정보를 알려줍니다.</div></div>
+          <div class="check"><span class="tag">TFTP</span><div>Pi가 전원을 켤 때 필요한 커널, dtb, firmware 파일을 전달합니다.</div></div>
+          <div class="check"><span class="tag">NFS</span><div>Pi가 Linux rootfs를 네트워크 드라이브처럼 마운트하게 합니다.</div></div>
+        </div>
+        <div class="callout"><strong>haneWIN은 빠른 검증용 provider입니다.</strong> 미등록 상태에서는 30일 평가판으로 동작하므로 장기 운영 기본값으로 안내하지 않습니다. 운영용 provider는 오픈소스/내장 조합으로 준비 중입니다.</div>
+        <p>공식 haneWIN 사이트에도 Raspberry Pi를 Windows에서 네트워크 부팅하는 가이드와 DHCP/TFTP/NFS 제품 문서가 있습니다.</p>
+        <div class="grid">
+          <div class="card"><h3>Windows용 RPi 부팅 가이드</h3><p><a href="https://www.hanewin.net/rpi/remote-rpi-boot.htm">hanewin.net Raspberry Pi network boot guide</a></p></div>
+          <div class="card"><h3>DHCP/TFTP 문서</h3><p><a href="https://hanewin.com/doc/dhcp/dhcp.htm">haneWIN DHCP Server documentation</a></p></div>
+          <div class="card"><h3>NFS 문서</h3><p><a href="https://hanewin.net/doc/nfs/nfsd.htm">haneWIN NFS Server documentation</a></p></div>
+        </div>
+      </section>
+
+      <section class="page" data-title="서비스 provider">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">장기 운영 방향</p>
+            <h2>Windows판도 DHCP, TFTP, NFS provider를 선택하게 만듭니다</h2>
+            <p class="subtitle">Linux판의 dnsmasq/TFTP/NFS 역할을 Windows에서 어떤 조합으로 실행할지 분리합니다.</p>
+          </div>
+          <div class="status-pill">provider</div>
+        </div>
+        <div class="grid">
+          <div class="card"><h3>무료 Lite provider</h3><p>내장 DHCP/TFTP 서버와 WinNFSd로 haneWIN 없이 먼저 테스트합니다.</p></div>
+          <div class="card"><h3>haneWIN</h3><p>빠른 비교용입니다. 미등록 30일 평가판이므로 운영 기본값으로 쓰지 않습니다.</p></div>
+          <div class="card"><h3>오픈소스 스택</h3><p>Open DHCP Server, Tftpd64, WinNFSd 조합은 추가 provider 후보로 유지합니다.</p></div>
+          <div class="card"><h3>Windows 내장/서버</h3><p>Windows Server DHCP/NFS 또는 내장 기능을 쓰는 환경은 별도 운영 provider로 분리합니다.</p></div>
+        </div>
+        <div class="callout"><strong>지금 테스트는 무료 Lite provider를 먼저 씁니다.</strong> haneWIN은 30일 평가판이므로 비교/검증용으로만 유지합니다. 자세한 표는 <code>docs\windows-service-providers.md</code>에 있습니다.</div>
+      </section>
+
+      <section class="page" data-title="실행 순서">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">버튼 순서</p>
+            <h2>처음에는 이 순서대로 누르면 됩니다</h2>
+            <p class="subtitle">중간에 실패가 나오면 다음 단계로 넘어가지 말고 해당 항목을 먼저 해결합니다.</p>
+          </div>
+          <div class="status-pill">7단계</div>
+        </div>
+        <div class="checklist">
+          <div class="check"><span class="tag">1</span><div><strong>상태 확인</strong><br>현재 PC, D: 저장소, S: SD카드, 서비스 포트를 읽기 전용으로 확인합니다.</div></div>
+          <div class="check"><span class="tag">2</span><div><strong>서버 PC 자동 준비</strong><br>D: 폴더 구조와 유선 IP <code>10.73.0.10</code>을 맞춥니다.</div></div>
+          <div class="check"><span class="tag need">3</span><div><strong>무료 부팅 서비스 시작</strong><br>내장 DHCP/TFTP 서버와 WinNFSd를 시작합니다. haneWIN 없이 먼저 확인합니다.</div></div>
+          <div class="check"><span class="tag need">4</span><div><strong>SD카드에 EEPROM 쓰기</strong><br>Pi 4가 네트워크 부팅을 시도하도록 EEPROM 업데이트 SD를 만듭니다.</div></div>
+          <div class="check"><span class="tag need">5</span><div><strong>첫 Pi 부팅파일 복사</strong><br>Raspberry Pi OS boot 파티션의 <code>start4.elf</code> 파일들을 <code>D:\tftp\&lt;serial&gt;</code>로 가져옵니다.</div></div>
+          <div class="check"><span class="tag need">6</span><div><strong>첫 Pi rootfs 복제</strong><br><code>D:\rootfs\&lt;serial&gt;</code>에 실제 Linux rootfs를 채웁니다. Windows 탐색기 복사는 피합니다.</div></div>
+          <div class="check"><span class="tag">7</span><div><strong>전체 상태 다시 확인</strong><br>서비스 포트와 TFTP/rootfs 상태를 다시 확인합니다.</div></div>
+        </div>
+      </section>
+
+      <section class="page" data-title="작업 기억장">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">인터럽트 복구용</p>
+            <h2>다음에 이어서 할 때는 이 문서들을 먼저 봅니다</h2>
+            <p class="subtitle">여러 작업과 에이전트 결과가 섞여도 현재 상태, 결정 이유, 다음 순서를 잃지 않기 위한 기록입니다.</p>
+          </div>
+          <div class="status-pill">메모리</div>
+        </div>
+        <div class="grid">
+          <div class="card"><h3>작업 원장</h3><p><a href="project-memory.md">docs\project-memory.md</a><br>현재 상태, 결정, 장비값, 다음 순서가 들어 있습니다.</p></div>
+          <div class="card"><h3>오늘 상세 로그</h3><p><a href="worklog/2026-05-15-rpi4-netboot.md">docs\worklog\2026-05-15-rpi4-netboot.md</a><br>인터럽트가 섞인 작업 흐름을 시간순으로 정리했습니다.</p></div>
+          <div class="card"><h3>기록 방식 결정</h3><p><a href="decisions/ADR-0001-project-memory-and-tracking.md">docs\decisions\ADR-0001...</a><br>앞으로 기록을 어떻게 남길지 정했습니다.</p></div>
+          <div class="card"><h3>도구 추천</h3><p><a href="project-tracking-recommendation.md">docs\project-tracking-recommendation.md</a><br>GitHub, Linear, Notion을 어떻게 나눠 쓸지 정리했습니다.</p></div>
+        </div>
+        <div class="callout"><strong>현재 핵심 기억:</strong> RPi4는 DHCP/TFTP로 커널까지 받았습니다. 다음 관문은 <code>D:\rootfs\d80c0b88</code>에 rootfs를 채워 NFS root 부팅을 완성하는 것입니다.</div>
+      </section>
+
+      <section class="page" data-title="현재 상태">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">점검 결과 해석</p>
+            <h2>현재 정상인 것과 아직 필요한 것</h2>
+            <p class="subtitle">상태 확인 로그의 `[정상]`, `[주의]`, `[필요]`를 이렇게 읽으면 됩니다.</p>
+          </div>
+          <div class="status-pill">68 / 100</div>
+        </div>
+        <div class="checklist">
+          <div class="check"><span class="tag">정상</span><div><code>D:</code>는 rpi 라벨의 NTFS 고정 저장소입니다.</div></div>
+          <div class="check"><span class="tag">정상</span><div>유선 이더넷은 <code>10.73.0.10/24</code>, 공유기 <code>10.73.0.1</code> ping도 성공합니다.</div></div>
+          <div class="check"><span class="tag">정상</span><div><code>D:\tftp</code>, <code>D:\rootfs</code>, <code>D:\iscsi</code>, <code>D:\downloads</code> 폴더가 있습니다.</div></div>
+          <div class="check"><span class="tag">정상</span><div>테스트 RPi4는 DHCP/TFTP로 커널까지 받았습니다. MAC은 <code>88:a2:9e:4f:a9:b1</code>, serial은 <code>d80c0b88</code>입니다.</div></div>
+          <div class="check"><span class="tag">정상</span><div><code>D:\tftp\d80c0b88</code>에는 RPi4 부팅 파일이 준비되어 있습니다.</div></div>
+          <div class="check"><span class="tag need">필요</span><div><code>D:\rootfs\d80c0b88</code>에 실제 Linux rootfs를 채워야 합니다. 지금 커널 panic의 핵심 원인입니다.</div></div>
+        </div>
+      </section>
+
+      <section class="page" data-title="첫 Pi 준비">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">첫 장비 온보딩</p>
+            <h2>첫 Pi 한 대를 기준 장비로 만들어야 합니다</h2>
+            <p class="subtitle">첫 Pi가 성공하면 그 구조를 복제해서 다음 Pi들을 등록하는 방식으로 갑니다.</p>
+          </div>
+          <div class="status-pill">다음 작업</div>
+        </div>
+        <div class="checklist">
+          <div class="check"><span class="tag">1</span><div><code>S:</code> SD카드에 EEPROM 이미지를 씁니다.</div></div>
+          <div class="check"><span class="tag">2</span><div>Pi 4를 그 SD카드로 한 번 부팅해서 EEPROM을 업데이트합니다.</div></div>
+          <div class="check"><span class="tag">3</span><div>첫 Pi의 serial과 MAC을 확인합니다.</div></div>
+          <div class="check"><span class="tag need">4</span><div><code>첫 Pi 부팅파일 복사</code> 버튼으로 Raspberry Pi OS boot partition 파일을 채웁니다. EEPROM SD는 이 용도가 아닙니다.</div></div>
+          <div class="check"><span class="tag need">5</span><div><code>D:\rootfs\&lt;serial&gt;</code>에 Linux rootfs를 복제합니다. Windows 탐색기 복사는 권한이 깨질 수 있어 피합니다.</div></div>
+        </div>
+      </section>
+
+      <section class="page" data-title="문제 해결">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">자주 막히는 곳</p>
+            <h2>실패 메시지는 이렇게 봅니다</h2>
+            <p class="subtitle">지금은 실제 부팅 전 준비 단계라 `필요`가 나오는 것이 정상입니다.</p>
+          </div>
+          <div class="status-pill">체크</div>
+        </div>
+        <div class="grid">
+          <div class="card"><h3>DHCP UDP 67 필요</h3><p>Pi에게 IP와 부팅 서버 정보를 줄 DHCP 서버가 아직 실행되지 않았다는 뜻입니다.</p></div>
+          <div class="card"><h3>TFTP UDP 69 필요</h3><p>Pi가 부팅 파일을 받아갈 TFTP 서버가 아직 실행되지 않았다는 뜻입니다.</p></div>
+          <div class="card"><h3>NFS TCP 2049 필요</h3><p>Pi가 rootfs를 마운트할 NFS 서버가 아직 실행되지 않았다는 뜻입니다.</p></div>
+        </div>
+        <div class="callout"><strong>가장 위험한 작업은 SD 쓰기입니다.</strong> 확인창에서 대상이 반드시 <code>S:</code> SD카드인지 확인하세요. <code>D:</code>는 서버 저장소라 지우면 안 됩니다.</div>
+      </section>
+
+      <div class="pager">
+        <button class="secondary" id="prev" type="button">이전</button>
+        <span class="page-count" id="count"></span>
+        <button class="primary" id="next" type="button">다음</button>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const pages = Array.from(document.querySelectorAll(".page"));
+    const nav = document.getElementById("nav");
+    const count = document.getElementById("count");
+    const prev = document.getElementById("prev");
+    const next = document.getElementById("next");
+    let index = 0;
+
+    pages.forEach((page, i) => {
+      const button = document.createElement("button");
+      button.className = "nav-button";
+      button.type = "button";
+      button.textContent = `${i + 1}. ${page.dataset.title}`;
+      button.addEventListener("click", () => show(i));
+      nav.appendChild(button);
+    });
+
+    function show(nextIndex) {
+      index = Math.max(0, Math.min(pages.length - 1, nextIndex));
+      pages.forEach((page, i) => page.classList.toggle("active", i === index));
+      Array.from(nav.children).forEach((button, i) => {
+        if (i === index) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+      count.textContent = `${index + 1} / ${pages.length}`;
+      prev.disabled = index === 0;
+      next.disabled = index === pages.length - 1;
+      next.textContent = index === pages.length - 1 ? "끝" : "다음";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    prev.addEventListener("click", () => show(index - 1));
+    next.addEventListener("click", () => show(index + 1));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft") show(index - 1);
+      if (event.key === "ArrowRight") show(index + 1);
+    });
+    show(0);
+  </script>
+</body>
+</html>

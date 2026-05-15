@@ -1,0 +1,30 @@
+{
+  "name": "rpi-netboot-windows",
+  "method": "hanewin-nfs",
+  "server_ip": "192.168.1.10",
+  "router_ip": "192.168.1.1",
+  "dns_server": "192.168.1.1",
+  "subnet_mask": "255.255.255.0",
+  "dhcp_start": "192.168.1.100",
+  "dhcp_end": "192.168.1.199",
+  "project_root": "C:\\RpiNetboot",
+  "tftp_root": "C:\\RpiNetboot\\tftp",
+  "nfs_root": "C:\\RpiNetboot\\nfs",
+  "nfs_alias": "/rpi",
+  "iscsi_root": "C:\\RpiNetboot\\iscsi",
+  "vhdx_size_gb": 32,
+  "clients": [
+    {
+      "serial": "12345678",
+      "mac": "dc:a6:32:12:34:56",
+      "ip": "192.168.1.101",
+      "hostname": "rpi-node-01",
+      "model": "pi4",
+      "boot_mode": "nfs",
+      "tftp_prefix": "12345678",
+      "iscsi_target_name": "",
+      "iscsi_initiator_iqn": "",
+      "root_uuid": ""
+    }
+  ]
+}
