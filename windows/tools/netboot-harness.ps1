@@ -22,7 +22,12 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 $BootLog = "D:\logs\rpi-boot-lite.log"
-$NfsStdoutLog = "D:\logs\winnfsd.stdout.log"
+$NfsStdoutLog = if ($Provider -eq "haneWIN") {
+    $latestHaneWinLog = Get-ChildItem "C:\Program Files\nfsd" -Filter "nfsd*.log" -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($latestHaneWinLog) { $latestHaneWinLog.FullName } else { "C:\Program Files\nfsd\nfsd2605.log" }
+} else {
+    "D:\logs\winnfsd.stdout.log"
+}
 $NfsStderrLog = "D:\logs\winnfsd.stderr.log"
 
 function Write-Check {
@@ -286,8 +291,8 @@ function Start-Attempt {
         "Power-cycle the SD-less Pi now, then run `finish-attempt`."
     )
     Set-Content -LiteralPath (Join-Path $dir "timeline.md") -Value $timeline -Encoding UTF8
-    Write-Check "정상" "attempt started" $id
-    Write-Check "다음" "power cycle" "SD 없는 RPi4 전원을 완전히 뺐다가 다시 넣은 뒤 finish-attempt 실행"
+    Write-Check "OK" "attempt started" $id
+    Write-Check "NEXT" "power cycle" "Power-cycle the SD-less RPi4, then run finish-attempt."
 }
 
 function Get-StartState {
@@ -330,17 +335,28 @@ function Classify-Evidence {
         [object] $TftpManifest
     )
 
-    $combined = ($BootText + "`n" + $NfsText + "`n" + $ConsoleText)
-    $dhcpPass = $BootText -match [regex]::Escape($Mac) -and $BootText -match "DHCP ACK"
-    $tftpStarted = $BootText -match "TFTP GET"
-    $kernelPass = $BootText -match "kernel8\.img bytes="
-    $cmdlinePass = $BootText -match "cmdline\.txt"
-    $dtbPass = $BootText -match "bcm2711-rpi-4-b\.dtb"
-    $initramfsPass = $BootText -match "initramfs8 bytes=.*" -and $BootText -match "TFTP DONE .*initramfs8"
-    $nfsMountPass = $NfsText -match "MOUNT MNT from" -or $NfsText -match "Final local requested path"
-    $nfsRootReadPass = $NfsText -match "\\usr\\sbin\\init" -or $NfsText -match "\\sbin\\init" -or $NfsText -match "\\etc\\fstab"
-    $initRead = $NfsText -match "\\usr\\sbin\\init"
-    $error14 = $ConsoleText -match "error\s*-14" -or $ConsoleText -match "failed\s*\(error\s*-14\)"
+    $escapedMac = [regex]::Escape($Mac)
+    $escapedPiIp = [regex]::Escape($PiIp)
+    $escapedSerial = [regex]::Escape($Serial)
+    $dhcpPass = $BootText -match "(?im)^.*DHCP\s+ACK\s+$escapedMac\s*->\s*$escapedPiIp\b"
+    $tftpStarted = $BootText -match "(?im)TFTP\s+GET\s+$escapedPiIp`:\d+\s+$escapedSerial/"
+    $kernelPass = $BootText -match "(?im)TFTP\s+DONE\s+$escapedPiIp`:\d+\s+$escapedSerial/kernel8\.img\b"
+    $cmdlinePass = $BootText -match "(?im)TFTP\s+DONE\s+$escapedPiIp`:\d+\s+$escapedSerial/cmdline\.txt\b"
+    $dtbPass = $BootText -match "(?im)TFTP\s+DONE\s+$escapedPiIp`:\d+\s+$escapedSerial/bcm2711-rpi-4-b\.dtb\b"
+    $initramfsPass = $BootText -match "(?im)TFTP\s+GET\s+$escapedPiIp`:\d+\s+$escapedSerial/initramfs8\b" -and $BootText -match "(?im)TFTP\s+DONE\s+$escapedPiIp`:\d+\s+$escapedSerial/initramfs8\b"
+    $nfsMountPass =
+        $NfsText -match "(?im)\bMOUNT\b.*\b(MNT|from|$escapedPiIp)\b" -or
+        $NfsText -match "(?im)\b$escapedPiIp\b.*\b(mount|mnt|nfs)\b" -or
+        $NfsText -match "(?im)\bFinal local requested path\b.*$escapedSerial"
+    $nfsRootReadPass =
+        $NfsText -match "\\usr\\sbin\\init" -or
+        $NfsText -match "/usr/sbin/init" -or
+        $NfsText -match "\\sbin\\init" -or
+        $NfsText -match "/sbin/init" -or
+        $NfsText -match "\\etc\\fstab" -or
+        $NfsText -match "/etc/fstab"
+    $initRead = $NfsText -match "\\usr\\sbin\\init" -or $NfsText -match "/usr/sbin/init" -or $NfsText -match "\\bin\\busybox" -or $NfsText -match "/bin/busybox"
+    $error14 = $ConsoleText -match "(?i)(error\s*[-=]?\s*14|EFAULT|Requested init .*failed)"
     $noInit = $ConsoleText -match "No working init found"
     $busyboxActive = [bool]$RootfsInspection.busyboxDiagnosticActive
     $repeatDhcpAfterNfs = $nfsMountPass -and (($BootText | Select-String -Pattern "DHCP ACK" -AllMatches).Matches.Count -ge 2)
@@ -441,7 +457,7 @@ function Finish-Attempt {
     $nfsText = Read-NewText $NfsStdoutLog (Select-LogOffset $state $NfsStdoutLog)
     $nfsErrText = Read-NewText $NfsStderrLog (Select-LogOffset $state $NfsStderrLog)
     Save-TextIfAny (Join-Path $dir "rpi-boot-lite.delta.log") $bootText
-    Save-TextIfAny (Join-Path $dir "winnfsd.stdout.delta.log") $nfsText
+    Save-TextIfAny (Join-Path $dir ("{0}.stdout.delta.log" -f $Provider.ToLowerInvariant())) $nfsText
     Save-TextIfAny (Join-Path $dir "winnfsd.stderr.delta.log") $nfsErrText
     Save-TextIfAny (Join-Path $dir "console.txt") $ConsoleText
 
@@ -484,9 +500,9 @@ function Finish-Attempt {
     Set-Content -LiteralPath (Join-Path $dir "timeline.md") -Value $timeline -Encoding UTF8
     Save-Json ([pscustomobject]@{ latestAttempt = $attempt.id; verdict = $verdict }) (Join-Path $OutRoot "latest-verdict.json")
 
-    Write-Check "정상" "attempt finished" $attempt.id
-    Write-Check "판정" $verdict.category "$($verdict.likelyArea), confidence=$($verdict.confidence)"
-    Write-Check "증거" "folder" $dir
+    Write-Check "OK" "attempt finished" $attempt.id
+    Write-Check "VERDICT" $verdict.category "$($verdict.likelyArea), confidence=$($verdict.confidence)"
+    Write-Check "EVIDENCE" "folder" $dir
 }
 
 function Get-NextThought {
@@ -494,14 +510,14 @@ function Get-NextThought {
     switch ($Verdict.category) {
         "INIT_EXEC_FAIL_PROBABLE" {
             if ($Verdict.diagnostic -eq "BUSYBOX_DIAGNOSTIC_ACTIVE") {
-                return "Busybox static init에서도 실패하면 systemd 문제가 아니라 WinNFSd/NTFS NFS provider 또는 rootfs 파일 표현 문제를 우선 의심한다. 다음 실험은 같은 bootfs/rootfs를 bridged Linux VM의 nfs-kernel-server로 export하는 provider A/B 테스트다."
+                return "Static busybox init also failed, so prioritize NFS provider or rootfs file representation over systemd. The next experiment is the same bootfs/rootfs exported by Linux nfs-kernel-server."
             }
-            return "systemd init에서 실패했으므로 busybox-static init variant로 NFS exec 자체와 동적 linker 체인을 분리한다."
+            return "The systemd init path failed. Use the busybox-static init variant to separate NFS exec behavior from the dynamic linker and systemd chain."
         }
-        "NFS_MOUNT_FAIL" { return "TFTP는 통과했으므로 nfsroot 경로, NFS export alias, portmap/NFS listener, 방화벽을 먼저 확인한다." }
-        "TFTP_BOOTFILE_FAIL" { return "DHCP는 통과했으므로 TFTP prefix와 boot 파일 세트, timeout을 먼저 확인한다." }
-        "DHCP_FAIL" { return "Pi가 서버를 찾지 못한다. 링크, VLAN/AP isolation, DHCP listener, MAC 예약을 먼저 확인한다." }
-        default { return "콘솔 증거를 추가하고 같은 attempt를 finish-attempt로 다시 패키징한다." }
+        "NFS_MOUNT_FAIL" { return "TFTP passed. Check nfsroot path, NFS export alias, portmap/NFS listener, and firewall first." }
+        "TFTP_BOOTFILE_FAIL" { return "DHCP passed. Check TFTP prefix, boot file set, and timeout patterns first." }
+        "DHCP_FAIL" { return "The Pi did not find the server. Check link, VLAN/AP isolation, DHCP listener, and MAC reservation first." }
+        default { return "Add console evidence and classify the same attempt again with finish-attempt." }
     }
 }
 
@@ -511,7 +527,7 @@ function Collect-Latest {
     $bootText = Get-TextWindow $BootLog 260
     $nfsText = Get-TextWindow $NfsStdoutLog 220
     Save-TextIfAny (Join-Path $dir "rpi-boot-lite.tail.log") $bootText
-    Save-TextIfAny (Join-Path $dir "winnfsd.stdout.tail.log") $nfsText
+    Save-TextIfAny (Join-Path $dir ("{0}.stdout.tail.log" -f $Provider.ToLowerInvariant())) $nfsText
     Save-TextIfAny (Join-Path $dir "console.txt") $ConsoleText
     $preflight = Get-Preflight
     $tftp = Get-TftpManifest
@@ -522,8 +538,8 @@ function Collect-Latest {
     Save-Json $rootfs (Join-Path $dir "rootfs-exec-inspection.json")
     Save-Json $verdict (Join-Path $dir "verdict.json")
     Save-Json ([pscustomobject]@{ latestCollection = $dir; verdict = $verdict }) (Join-Path $OutRoot "latest-verdict.json")
-    Write-Check "판정" $verdict.category "$($verdict.likelyArea), confidence=$($verdict.confidence)"
-    Write-Check "증거" "folder" $dir
+    Write-Check "VERDICT" $verdict.category "$($verdict.likelyArea), confidence=$($verdict.confidence)"
+    Write-Check "EVIDENCE" "folder" $dir
 }
 
 switch ($Command) {

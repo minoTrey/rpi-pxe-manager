@@ -102,3 +102,33 @@ D:\tools\rpi-netboot\linux-nfs-provider
 ```
 
 Linux VM export가 준비된 뒤에는 `start-attempt`가 `cmdline.txt`를 Linux NFS provider로 바꾸고 하네스 attempt를 시작합니다.
+
+## 12:13 haneWIN portable NFS A/B attempt 추가
+
+haneWIN은 장기 운영 기본 provider가 아니라 WinNFSd/NTFS NFS 표현 문제를 가르는 A/B 진단 provider로만 둡니다.
+
+관리자 권한 없는 Codex 세션에서는 `C:\Program Files\nfsd\exports` 수정과 서비스 제어가 막힐 수 있었습니다. 그래서 haneWIN 실행 파일을 `D:\tools\rpi-netboot\hanewin-portable`로 복사하고, 서비스 대신 `nfsd.exe -debug -portmap` portable 모드로 실행하도록 자동화를 바꿨습니다.
+
+추가한 파일:
+
+- `windows\tools\hanewin-nfs-provider.ps1`
+- `windows\RPI-Netboot-HaneWIN-NFS-Start-Attempt-Admin.bat`
+- `windows\RPI-Netboot-HaneWIN-NFS-Status-Admin.bat`
+- `windows\docs\hanewin-nfs-ab-test.md`
+
+현재 서버 상태:
+
+```text
+DHCP/TFTP: RpiBootServiceLite 유지
+NFS: haneWIN portable nfsd.exe
+NFS listener: TCP/UDP 111, TCP/UDP 2049
+export: D:\rootfs -name:rpi -alldirs -i32 -maproot:0:0 -exec
+cmdline: nfsroot=10.73.0.10:/rpi/d80c0b88,vers=3,tcp ... init=/usr/sbin/init
+latest attempt: 20260519-121333-d80c0b88-hanewin-busybox-static
+```
+
+Codex가 8분 동안 새 로그를 기다렸지만, `D:\logs\rpi-boot-lite.log`에는 새 DHCP 요청이 들어오지 않았습니다. 따라서 아직 haneWIN provider 결과가 나온 것이 아니라, Pi가 새 netboot attempt를 시작하지 않은 상태입니다.
+
+다음 물리 작업은 SD 없는 RPi4 전원을 완전히 뺐다가 다시 꽂는 것입니다. 서버 쪽은 이미 haneWIN portable NFS A/B attempt를 받을 준비가 되어 있습니다.
+
+하네스 regex도 함께 보강했습니다. haneWIN의 `mountd started`, `Exported file systems`, `/rpi` 같은 provider-ready 로그를 실제 Pi mount 성공으로 오판하지 않도록 DHCP/TFTP/NFS mount 판정에 MAC, IP, serial 조건을 더 강하게 걸었습니다.

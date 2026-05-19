@@ -91,15 +91,18 @@ Kernel panic - not syncing: Requested init /usr/sbin/init failed (error -14)
 - 공식 bootfs 동기화 후 Pi가 `kernel8.img` 9,695,883 bytes와 `initramfs8` 16,040,912 bytes를 TFTP로 수신했습니다.
 - `D:\rootfs\d80c0b88\usr\sbin\init`은 임시로 Debian arm64 static busybox로 교체됐고, 원래 systemd init은 `init.systemd-before-busybox`에 백업됐습니다.
 - 테스트 하네스가 최신 로그를 `INIT_EXEC_FAIL_PROBABLE`로 자동 판정했습니다.
+- haneWIN portable NFS A/B provider가 준비됐습니다. 현재 haneWIN은 장기 기본 provider가 아니라 WinNFSd/NTFS 문제를 가르는 진단 provider입니다.
 
 ## 현재 필요한 것
 
 1. `error -14`는 Linux errno 기준 `EFAULT`라서 단순 파일 없음, 권한 없음, 포맷 오류보다 ELF loader/NFS 파일 표현 문제 가능성이 큽니다.
 2. TFTP boot 파일과 rootfs OS 세트 불일치 가설은 공식 bootfs 재시험으로 가능성이 낮아졌습니다.
 3. static busybox init 테스트로 systemd/동적 linker 단독 문제 가능성은 낮아졌습니다.
-4. 같은 rootfs를 Linux NFS server에서 내보내 provider 문제를 확정해야 합니다.
-5. rootfs 준비 기능과 bootfs 동기화 기능을 GUI 버튼과 상태 점검에 더 친절하게 연결해야 합니다.
-6. Zero 2 W SD + USB gadget 준비 기능은 RPi4 netboot 흐름과 분리해야 합니다.
+4. 현재 서버는 haneWIN portable NFS attempt를 받을 준비가 되어 있지만, 아직 새 Pi DHCP 요청이 들어오지 않았습니다.
+5. SD 없는 RPi4 전원을 완전히 뺐다가 다시 꽂아 haneWIN NFS에서 같은 실패가 재현되는지 확인해야 합니다.
+6. haneWIN에서도 같은 실패가 재현되면 같은 rootfs를 Linux NFS server에서 내보내 provider 문제를 확정해야 합니다.
+7. rootfs 준비 기능과 bootfs 동기화 기능을 GUI 버튼과 상태 점검에 더 친절하게 연결해야 합니다.
+8. Zero 2 W SD + USB gadget 준비 기능은 RPi4 netboot 흐름과 분리해야 합니다.
 
 ## 추적 도구 상태
 
@@ -116,9 +119,10 @@ Kernel panic - not syncing: Requested init /usr/sbin/init failed (error -14)
 3. DHCP/TFTP/NFS/Portmapper가 정상인지 봅니다.
 4. `D:\rootfs\d80c0b88`에 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`가 있는지 봅니다.
 5. `D:\tftp\d80c0b88`가 공식 bootfs인지 확인합니다. 현재 기준 `kernel8.img`는 9,695,883 bytes입니다.
-6. SD 없이 RPi4 전원을 다시 넣어 static busybox init 결과를 확인합니다.
+6. SD 없이 RPi4 전원을 다시 넣어 haneWIN portable NFS attempt를 발생시킵니다.
 7. 화면에서 `error -14`가 사라지는지 확인합니다.
-8. Zero 2 W는 이 테스트에 포함하지 말고, 별도 SD + USB gadget 테스트로 진행합니다.
+8. 로그에 새 DHCP 요청이 없으면 provider 판정 전 단계입니다. 전원, SD 제거 상태, Ethernet link를 먼저 봅니다.
+9. Zero 2 W는 이 테스트에 포함하지 말고, 별도 SD + USB gadget 테스트로 진행합니다.
 
 하네스 최신 판정:
 

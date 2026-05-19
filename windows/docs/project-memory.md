@@ -62,6 +62,7 @@ RPi4는 DHCP/TFTP, 공식 bootfs 수신, NFS root mount까지 성공했습니다
 | 32 | 2026-05-15 | static busybox init 진단 적용 | `windows\tools\init-diagnostic.ps1` 추가, 원래 systemd init 백업 후 Debian arm64 static busybox를 임시 init으로 설치 | Pi 재부팅 결과 대기 |
 | 33 | 2026-05-19 | netboot 테스트 하네스 도입 | `windows\tools\netboot-harness.ps1` 추가, 최신 로그를 증거 묶음으로 수집하고 자동 분류 | 최신 판정 `INIT_EXEC_FAIL_PROBABLE`, 다음은 Linux NFS provider A/B |
 | 34 | 2026-05-19 | Linux NFS provider 전환 자동화 추가 | `windows\tools\linux-nfs-provider.ps1`와 Linux VM용 bundle 생성 | WinNFSd/NTFS 의심을 실제 provider A/B 테스트로 검증할 준비 |
+| 35 | 2026-05-19 | haneWIN portable NFS A/B attempt 추가 | haneWIN을 서비스가 아니라 `D:\tools\rpi-netboot\hanewin-portable`에서 `nfsd.exe -debug -portmap`으로 실행 | 서버는 haneWIN NFS 대기 중, 아직 새 Pi DHCP 요청 없음 |
 
 ## 현재 확정된 장비 값
 
@@ -92,12 +93,15 @@ RPi4는 DHCP/TFTP, 공식 bootfs 수신, NFS root mount까지 성공했습니다
 - SD 없는 부팅에서 NFS root mount는 성공했습니다.
 - static busybox init 진단이 적용됐고 원래 systemd init은 `D:\rootfs\d80c0b88\usr\sbin\init.systemd-before-busybox`에 백업됐습니다.
 - netboot 하네스가 `D:\logs\netboot-harness`에 evidence와 verdict를 저장합니다.
+- haneWIN portable NFS A/B provider가 준비됐고 TCP/UDP `111`, `2049`를 `nfsd.exe`가 잡는 상태까지 확인했습니다.
 
 ## 현재 막힌 것
 
 rootfs empty 문제와 bootfs 세트 불일치 가능성은 대부분 해소됐습니다. 현재 blocker는 NFS root mount 이후 `/usr/sbin/init` 실행이 `error -14`로 실패하는 점입니다.
 
 WinNFSd는 대량 쓰기 중 `Input/output error`, `Stale file handle`가 나올 수 있습니다. 그래서 현재 rootfs helper는 `rsync -aHx --inplace --whole-file --omit-dir-times --numeric-ids`를 사용하고, 부팅에 덜 중요한 개발 헤더/문서류를 제외하는 방향으로 조정했습니다. 다만 현재 `error -14`는 WinNFSd/NTFS 위의 Linux ELF 실행 또는 rootfs 메타데이터 표현 문제일 가능성이 커졌습니다.
+
+haneWIN은 장기 기본 provider가 아니라 A/B 진단 provider입니다. 현재 서버는 haneWIN portable NFS를 띄워 둔 상태지만, 아직 새 전원 재인가 로그가 들어오지 않았습니다. 다음 관찰은 새 DHCP/TFTP/NFS 요청이 들어온 뒤에만 판정합니다.
 
 추적 도구는 다음 기준으로 붙였습니다. GitHub는 기존 `minoTrey/rpi-pxe-manager` repository를 사용하고, Windows판은 그 안의 `windows/` 폴더로 분리합니다. Linear에는 `RPI Netboot Windows` 프로젝트를 만들었고 남은 작업을 이슈로 쪼갰습니다. 이 문서는 그래도 세션 복구용 원장으로 계속 유지합니다.
 
@@ -107,11 +111,12 @@ WinNFSd는 대량 쓰기 중 `Input/output error`, `Stale file handle`가 나올
 2. `전체 상태 다시 확인`으로 DHCP/TFTP/NFS 리스너와 rootfs 상태를 확인합니다.
 3. rootfs 준비 기능을 GUI에 연결합니다. 현재 후보 스크립트는 `tools\rootfs-helper.ps1`입니다.
 4. `D:\rootfs\d80c0b88`에 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`가 있는지 확인합니다.
-5. 같은 bootfs/rootfs로 NFS provider만 bridged Linux VM의 `nfs-kernel-server`로 바꿔 A/B 테스트합니다.
-6. Linux NFS에서 성공하면 WinNFSd provider를 운영 후보에서 낮추고 bridged Linux VM/WSL/서버 provider를 GUI에 분리합니다.
-7. 성공하면 첫 RPi4를 기준 이미지로 삼아 다음 RPi4들을 복제/등록하는 GUI 흐름을 만듭니다.
-8. Zero 2 W용 SD + USB gadget 준비 기능은 별도 버튼으로 분리합니다. 네트워크 부팅 흐름에 섞지 않습니다.
-9. GitHub `minoTrey/rpi-pxe-manager`의 Windows branch에 변경을 commit/push하고, Linear 이슈에 진행 상황을 남깁니다.
+5. SD 없는 RPi4 전원을 완전히 뺐다가 다시 꽂아 haneWIN portable NFS A/B attempt를 먼저 판정합니다.
+6. haneWIN에서도 같은 init exec failure가 재현되면 같은 bootfs/rootfs로 NFS provider만 bridged Linux VM의 `nfs-kernel-server`로 바꿔 A/B 테스트합니다.
+7. Linux NFS에서 성공하면 WinNFSd provider를 운영 후보에서 낮추고 bridged Linux VM/WSL/서버 provider를 GUI에 분리합니다.
+8. 성공하면 첫 RPi4를 기준 이미지로 삼아 다음 RPi4들을 복제/등록하는 GUI 흐름을 만듭니다.
+9. Zero 2 W용 SD + USB gadget 준비 기능은 별도 버튼으로 분리합니다. 네트워크 부팅 흐름에 섞지 않습니다.
+10. GitHub `minoTrey/rpi-pxe-manager`의 Windows branch에 변경을 commit/push하고, Linear 이슈에 진행 상황을 남깁니다.
 
 ## 에이전트/도구 운영 메모
 
