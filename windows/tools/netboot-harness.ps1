@@ -23,8 +23,13 @@ $ProgressPreference = "SilentlyContinue"
 
 $BootLog = "D:\logs\rpi-boot-lite.log"
 $NfsStdoutLog = if ($Provider -eq "haneWIN") {
-    $latestHaneWinLog = Get-ChildItem "C:\Program Files\nfsd" -Filter "nfsd*.log" -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if ($latestHaneWinLog) { $latestHaneWinLog.FullName } else { "C:\Program Files\nfsd\nfsd2605.log" }
+    $portableLog = "D:\logs\hanewin-portable.stdout.log"
+    if (Test-Path -LiteralPath $portableLog) {
+        $portableLog
+    } else {
+        $latestHaneWinLog = Get-ChildItem "C:\Program Files\nfsd" -Filter "nfsd*.log" -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($latestHaneWinLog) { $latestHaneWinLog.FullName } else { "C:\Program Files\nfsd\nfsd2605.log" }
+    }
 } else {
     "D:\logs\winnfsd.stdout.log"
 }
@@ -346,8 +351,11 @@ function Classify-Evidence {
     $initramfsPass = $BootText -match "(?im)TFTP\s+GET\s+$escapedPiIp`:\d+\s+$escapedSerial/initramfs8\b" -and $BootText -match "(?im)TFTP\s+DONE\s+$escapedPiIp`:\d+\s+$escapedSerial/initramfs8\b"
     $nfsMountPass =
         $NfsText -match "(?im)\bMOUNT\b.*\b(MNT|from|$escapedPiIp)\b" -or
+        $NfsText -match "(?im)\bmount3\b.*\b$escapedPiIp\b" -or
+        $NfsText -match "(?im)mountd:\s+name\s+rpi/$escapedSerial\s+-->" -or
         $NfsText -match "(?im)\b$escapedPiIp\b.*\b(mount|mnt|nfs)\b" -or
         $NfsText -match "(?im)\bFinal local requested path\b.*$escapedSerial"
+    $nfsMountInvalidArgument = $ConsoleText -match "(?i)(nfs\s+mount.*invalid argument|mount:\s+invalid argument)"
     $nfsRootReadPass =
         $NfsText -match "\\usr\\sbin\\init" -or
         $NfsText -match "/usr/sbin/init" -or
@@ -393,10 +401,14 @@ function Classify-Evidence {
         $category = "INITRAMFS_MISSING_OR_FAIL"
         $likelyArea = "TFTP initramfs transfer"
         $confidence = "medium"
+    } elseif ($nfsMountInvalidArgument) {
+        $category = "NFS_MOUNT_INVALID_ARGUMENT"
+        $likelyArea = "NFS provider mount protocol/options compatibility"
+        $confidence = "high"
     } elseif (-not $nfsMountPass) {
         $category = "NFS_MOUNT_FAIL"
-        $likelyArea = "NFS provider, portmap, nfsroot path, firewall"
-        $confidence = "medium-high"
+        $likelyArea = if ($nfsMountInvalidArgument) { "NFS provider mount protocol/options compatibility" } else { "NFS provider, portmap, nfsroot path, firewall" }
+        $confidence = if ($nfsMountInvalidArgument) { "high" } else { "medium-high" }
     } elseif (-not $nfsRootReadPass) {
         $category = "NFS_ROOT_READ_FAIL"
         $likelyArea = "NFS export contents or rootfs path"
@@ -437,6 +449,7 @@ function Classify-Evidence {
             initRead = $initRead
             consoleError14 = $error14
             consoleNoWorkingInit = $noInit
+            consoleNfsMountInvalidArgument = $nfsMountInvalidArgument
             busyboxDiagnosticActive = $busyboxActive
             repeatDhcpAfterNfs = $repeatDhcpAfterNfs
         }
@@ -515,6 +528,7 @@ function Get-NextThought {
             return "The systemd init path failed. Use the busybox-static init variant to separate NFS exec behavior from the dynamic linker and systemd chain."
         }
         "NFS_MOUNT_FAIL" { return "TFTP passed. Check nfsroot path, NFS export alias, portmap/NFS listener, and firewall first." }
+        "NFS_MOUNT_INVALID_ARGUMENT" { return "The Pi reached NFS mount negotiation, but the provider/options combination was rejected. Move the same bootfs/rootfs to Linux nfs-kernel-server for the next A/B test." }
         "TFTP_BOOTFILE_FAIL" { return "DHCP passed. Check TFTP prefix, boot file set, and timeout patterns first." }
         "DHCP_FAIL" { return "The Pi did not find the server. Check link, VLAN/AP isolation, DHCP listener, and MAC reservation first." }
         default { return "Add console evidence and classify the same attempt again with finish-attempt." }

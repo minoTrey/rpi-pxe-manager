@@ -13,6 +13,8 @@ param(
     [ValidateSet("Portable", "Service")]
     [string] $Mode = "Portable",
     [string] $PortableRoot = "D:\tools\rpi-netboot\hanewin-portable",
+    [string] $NfsOptions = "vers=3,udp,nolock,rsize=4096,wsize=4096",
+    [string] $ExtraKernelArgs = "nfsrootdebug",
     [string] $ConsoleText = ""
 )
 
@@ -126,11 +128,27 @@ function Backup-Cmdline {
     $backup
 }
 
-function Set-WinNfsdCmdline {
+function Set-HaneWinCmdline {
     $paths = Get-Paths
-    $line = "console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=$($paths.ServerIp):/rpi/$Serial,vers=3,tcp rw ip=dhcp rootwait elevator=deadline init=/usr/sbin/init"
+    $line = "console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=$($paths.ServerIp):/rpi/$Serial,$NfsOptions rw ip=dhcp rootwait elevator=deadline init=/usr/sbin/init"
+    if (-not [string]::IsNullOrWhiteSpace($ExtraKernelArgs)) {
+        $line = "$line $ExtraKernelArgs"
+    }
     Set-Content -LiteralPath $paths.Cmdline -Value $line -Encoding ASCII -NoNewline
     Write-Check "OK" "cmdline" $line
+}
+
+function Set-WinNfsdCmdline {
+    $oldOptions = $NfsOptions
+    $oldExtra = $ExtraKernelArgs
+    try {
+        $script:NfsOptions = "vers=3,tcp"
+        $script:ExtraKernelArgs = ""
+        Set-HaneWinCmdline
+    } finally {
+        $script:NfsOptions = $oldOptions
+        $script:ExtraKernelArgs = $oldExtra
+    }
 }
 
 function Configure-HaneWin {
@@ -304,7 +322,7 @@ switch ($Command) {
         Start-HaneWinNfs
         $paths = Get-Paths
         $backup = Backup-Cmdline $paths.Cmdline
-        Set-WinNfsdCmdline
+        Set-HaneWinCmdline
         Write-Check "OK" "cmdline backup" $backup
         Invoke-Harness "start-attempt"
     }

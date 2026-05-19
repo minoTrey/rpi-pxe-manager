@@ -69,7 +69,7 @@ function Set-Cmdline {
     $backup = Backup-Cmdline $paths.Cmdline
     if ($TargetProvider -eq "LinuxNFS") {
         $nfsPath = "{0}/{1}" -f $LinuxExportRoot.TrimEnd("/"), $Serial
-        $line = "console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=$($LinuxServerIp):$nfsPath,vers=3,proto=tcp,rw ip=dhcp rootwait elevator=deadline init=/usr/sbin/init"
+        $line = "console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=$($LinuxServerIp):$nfsPath,vers=3,tcp,nolock,rsize=8192,wsize=8192 rw ip=dhcp rootwait elevator=deadline init=/usr/sbin/init nfsrootdebug"
     } else {
         $alias = $paths.NfsAlias.TrimEnd("/")
         $line = "console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=$($paths.ServerIp):$alias/$Serial,vers=3,tcp rw ip=dhcp rootwait elevator=deadline init=/usr/sbin/init"
@@ -86,8 +86,8 @@ function Set-Cmdline {
         backup = $backup
         updatedAt = (Get-Date).ToString("o")
     }) $paths.StatePath
-    Write-Check "정상" "cmdline provider" "$TargetProvider -> $line"
-    Write-Check "정상" "cmdline backup" $backup
+    Write-Check "OK" "cmdline provider" "$TargetProvider -> $line"
+    Write-Check "OK" "cmdline backup" $backup
 }
 
 function Write-LinuxScripts {
@@ -118,6 +118,7 @@ apt-get update
 apt-get install -y nfs-kernel-server rsync
 
 mkdir -p "$TARGET"
+mkdir -p /etc/exports.d
 
 if [ -n "$SOURCE_SSH" ]; then
   echo "Pulling rootfs from SSH source: $SOURCE_SSH:/"
@@ -240,28 +241,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\linux-nfs-pr
 
     $exportsText = "$LinuxExportRoot/$Serial 10.73.0.0/24(rw,sync,no_subtree_check,no_root_squash,insecure)"
 
-    Set-Content -LiteralPath $setup -Value $setupText -Encoding UTF8
-    Set-Content -LiteralPath $verify -Value $verifyText -Encoding UTF8
-    Set-Content -LiteralPath $readme -Value $readmeText -Encoding UTF8
+    Set-Content -LiteralPath $setup -Value $setupText -Encoding ASCII
+    Set-Content -LiteralPath $verify -Value $verifyText -Encoding ASCII
+    Set-Content -LiteralPath $readme -Value $readmeText -Encoding ASCII
     Set-Content -LiteralPath $exports -Value $exportsText -Encoding ASCII
 
-    Write-Check "정상" "Linux NFS provider bundle" $paths.BundleRoot
-    Write-Check "다음" "Linux VM" "bundle 폴더를 Linux VM에 복사하고 README.md 순서대로 실행"
+    Write-Check "OK" "Linux NFS provider bundle" $paths.BundleRoot
+    Write-Check "NEXT" "Linux VM" "Copy this bundle to the Linux VM/helper and run README.md steps."
 }
 
 function Show-Status {
     $paths = Get-Paths
-    Write-Check "정보" "bundle" $paths.BundleRoot
-    Write-Check "정보" "cmdline" $paths.Cmdline
+    Write-Check "INFO" "bundle" $paths.BundleRoot
+    Write-Check "INFO" "cmdline" $paths.Cmdline
     if (Test-Path -LiteralPath $paths.Cmdline) {
         Write-Output ((Get-Content -LiteralPath $paths.Cmdline -Raw -Encoding ASCII).Trim())
     }
     if (Test-Path -LiteralPath $paths.StatePath) {
-        Write-Check "정보" "provider state" $paths.StatePath
+        Write-Check "INFO" "provider state" $paths.StatePath
         Get-Content -LiteralPath $paths.StatePath -Raw -Encoding UTF8
     }
     if (Test-Path -LiteralPath (Join-Path $OutRoot "latest-verdict.json")) {
-        Write-Check "정보" "latest verdict" (Join-Path $OutRoot "latest-verdict.json")
+        Write-Check "INFO" "latest verdict" (Join-Path $OutRoot "latest-verdict.json")
         Get-Content -LiteralPath (Join-Path $OutRoot "latest-verdict.json") -Raw -Encoding UTF8
     }
 }
@@ -269,15 +270,23 @@ function Show-Status {
 function Invoke-Harness {
     param([string] $HarnessCommand)
     $script = Join-Path $PSScriptRoot "netboot-harness.ps1"
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $script $HarnessCommand `
-        -Config $Config `
-        -Serial $Serial `
-        -Mac $Mac `
-        -PiIp $PiIp `
-        -Provider LinuxNFS `
-        -InitVariant busybox-static `
-        -OutRoot $OutRoot `
-        -ConsoleText $ConsoleText
+    $args = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $script,
+        $HarnessCommand,
+        "-Config", $Config,
+        "-Serial", $Serial,
+        "-Mac", $Mac,
+        "-PiIp", $PiIp,
+        "-Provider", "LinuxNFS",
+        "-InitVariant", "busybox-static",
+        "-OutRoot", $OutRoot
+    )
+    if (-not [string]::IsNullOrWhiteSpace($ConsoleText)) {
+        $args += @("-ConsoleText", $ConsoleText)
+    }
+    & powershell.exe @args
 }
 
 switch ($Command) {

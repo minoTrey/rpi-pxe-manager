@@ -1,0 +1,21 @@
+{
+  "updatedAt": "2026-05-19T13:55:00+09:00",
+  "nodes": [
+    { "id": "server-pc", "type": "machine", "label": "Windows server PC", "ip": "10.73.0.10" },
+    { "id": "router", "type": "network", "label": "ipTIME router", "ip": "10.73.0.1" },
+    { "id": "rpi4-d80c0b88", "type": "device", "label": "Test RPi4", "mac": "88:a2:9e:4f:a9:b1", "ip": "10.73.0.155" },
+    { "id": "provider-winnfsd", "type": "provider", "label": "WinNFSd" },
+    { "id": "provider-hanewin", "type": "provider", "label": "haneWIN portable" },
+    { "id": "provider-linux-nfs", "type": "provider", "label": "Linux nfs-kernel-server" },
+    { "id": "attempt-20260519-133535", "type": "attempt", "label": "haneWIN UDP corrected attempt" },
+    { "id": "verdict-nfs-invalid-argument", "type": "verdict", "label": "NFS_MOUNT_INVALID_ARGUMENT" }
+  ],
+  "edges": [
+    { "from": "server-pc", "to": "router", "type": "connected_to" },
+    { "from": "rpi4-d80c0b88", "to": "server-pc", "type": "dhcp_tftp_from" },
+    { "from": "attempt-20260519-133535", "to": "provider-hanewin", "type": "uses_provider" },
+    { "from": "attempt-20260519-133535", "to": "rpi4-d80c0b88", "type": "boots_device" },
+    { "from": "attempt-20260519-133535", "to": "verdict-nfs-invalid-argument", "type": "produced" },
+    { "from": "provider-linux-nfs", "to": "verdict-nfs-invalid-argument", "type": "next_ab_test_for" }
+  ]
+}
