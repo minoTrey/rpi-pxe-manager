@@ -349,21 +349,24 @@ function Classify-Evidence {
     $cmdlinePass = $BootText -match "(?im)TFTP\s+DONE\s+$escapedPiIp`:\d+\s+$escapedSerial/cmdline\.txt\b"
     $dtbPass = $BootText -match "(?im)TFTP\s+DONE\s+$escapedPiIp`:\d+\s+$escapedSerial/bcm2711-rpi-4-b\.dtb\b"
     $initramfsPass = $BootText -match "(?im)TFTP\s+GET\s+$escapedPiIp`:\d+\s+$escapedSerial/initramfs8\b" -and $BootText -match "(?im)TFTP\s+DONE\s+$escapedPiIp`:\d+\s+$escapedSerial/initramfs8\b"
-    $nfsMountPass =
+    $consoleNfsMountPass = $ConsoleText -match "(?i)(NFS root mounted|Mounting root file system\s+.*done|VFS:\s+Mounted root|root filesystem\s+.*done)"
+    $consoleBusyboxRcMissing = $ConsoleText -match "(?i)(can't run\s+'/etc/init\.d/rcS'|cannot run\s+'/etc/init\.d/rcS'|Please press Enter to activate this console)"
+    $consoleInitReached = $consoleBusyboxRcMissing -or ($ConsoleText -match "(?i)(Starting systemd-udevd|Run\s+/init\s+as init process|Run\s+/usr/sbin/init\s+as init process)")
+    $nfsMountPass = $consoleNfsMountPass -or
         $NfsText -match "(?im)\bMOUNT\b.*\b(MNT|from|$escapedPiIp)\b" -or
         $NfsText -match "(?im)\bmount3\b.*\b$escapedPiIp\b" -or
         $NfsText -match "(?im)mountd:\s+name\s+rpi/$escapedSerial\s+-->" -or
         $NfsText -match "(?im)\b$escapedPiIp\b.*\b(mount|mnt|nfs)\b" -or
         $NfsText -match "(?im)\bFinal local requested path\b.*$escapedSerial"
     $nfsMountInvalidArgument = $ConsoleText -match "(?i)(nfs\s+mount.*invalid argument|mount:\s+invalid argument)"
-    $nfsRootReadPass =
+    $nfsRootReadPass = $consoleBusyboxRcMissing -or
         $NfsText -match "\\usr\\sbin\\init" -or
         $NfsText -match "/usr/sbin/init" -or
         $NfsText -match "\\sbin\\init" -or
         $NfsText -match "/sbin/init" -or
         $NfsText -match "\\etc\\fstab" -or
         $NfsText -match "/etc/fstab"
-    $initRead = $NfsText -match "\\usr\\sbin\\init" -or $NfsText -match "/usr/sbin/init" -or $NfsText -match "\\bin\\busybox" -or $NfsText -match "/bin/busybox"
+    $initRead = $consoleInitReached -or $NfsText -match "\\usr\\sbin\\init" -or $NfsText -match "/usr/sbin/init" -or $NfsText -match "\\bin\\busybox" -or $NfsText -match "/bin/busybox"
     $error14 = $ConsoleText -match "(?i)(error\s*[-=]?\s*14|EFAULT|Requested init .*failed)"
     $noInit = $ConsoleText -match "No working init found"
     $busyboxActive = [bool]$RootfsInspection.busyboxDiagnosticActive
@@ -413,6 +416,10 @@ function Classify-Evidence {
         $category = "NFS_ROOT_READ_FAIL"
         $likelyArea = "NFS export contents or rootfs path"
         $confidence = "medium"
+    } elseif ($busyboxActive -and $consoleBusyboxRcMissing) {
+        $category = "INIT_EXEC_REACHED_BUSYBOX_RC_MISSING"
+        $likelyArea = "diagnostic busybox init reached; restore systemd init and retest"
+        $confidence = "high"
     } elseif ($error14 -or $noInit -or ($initRead -and $repeatDhcpAfterNfs)) {
         $category = "INIT_EXEC_FAIL_PROBABLE"
         $likelyArea = "NFS root ELF execution, provider file representation, rootfs metadata"
@@ -445,11 +452,13 @@ function Classify-Evidence {
             dtbPass = $dtbPass
             initramfsPass = $initramfsPass
             nfsMountPass = $nfsMountPass
+            consoleNfsMountPass = $consoleNfsMountPass
             nfsRootReadPass = $nfsRootReadPass
             initRead = $initRead
             consoleError14 = $error14
             consoleNoWorkingInit = $noInit
             consoleNfsMountInvalidArgument = $nfsMountInvalidArgument
+            consoleBusyboxRcMissing = $consoleBusyboxRcMissing
             busyboxDiagnosticActive = $busyboxActive
             repeatDhcpAfterNfs = $repeatDhcpAfterNfs
         }
@@ -529,6 +538,7 @@ function Get-NextThought {
         }
         "NFS_MOUNT_FAIL" { return "TFTP passed. Check nfsroot path, NFS export alias, portmap/NFS listener, and firewall first." }
         "NFS_MOUNT_INVALID_ARGUMENT" { return "The Pi reached NFS mount negotiation, but the provider/options combination was rejected. Move the same bootfs/rootfs to Linux nfs-kernel-server for the next A/B test." }
+        "INIT_EXEC_REACHED_BUSYBOX_RC_MISSING" { return "The diagnostic busybox init executed successfully. Restore the original systemd init and retest the same haneWIN minimal provider profile." }
         "TFTP_BOOTFILE_FAIL" { return "DHCP passed. Check TFTP prefix, boot file set, and timeout patterns first." }
         "DHCP_FAIL" { return "The Pi did not find the server. Check link, VLAN/AP isolation, DHCP listener, and MAC reservation first." }
         default { return "Add console evidence and classify the same attempt again with finish-attempt." }

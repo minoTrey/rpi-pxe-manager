@@ -141,7 +141,6 @@ function Install-BusyBoxInit {
     $busybox = Get-BusyBox
     Copy-Item -LiteralPath $busybox -Destination $paths.Init -Force
     Set-CmdlineInit $paths.Cmdline
-
     $note = @(
         "Temporary diagnostic mode.",
         "usr/sbin/init was replaced with Debian arm64 busybox-static.",
@@ -165,5 +164,10 @@ function Restore-Init {
 switch ($Command) {
     "status" { Show-Status }
     "install-busybox" { Install-BusyBoxInit; Show-Status }
-    "restore" { Restore-Init; Show-Status }
+    "restore" {
+        Restore-Init
+        $paths = Get-Paths
+        Remove-Item -LiteralPath $paths.Marker -Force -ErrorAction SilentlyContinue
+        Show-Status
+    }
 }

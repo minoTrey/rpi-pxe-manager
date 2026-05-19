@@ -155,3 +155,43 @@ console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=10.73.0.10:/rpi/d80c0b
 - haneWIN portable NFS PID `13856`
 - DHCP/TFTP는 `RpiBootServiceLite`
 - 사용자 RPi4 전원 재연결 대기
+
+## 14:34 - haneWIN minimal + BusyBox 진단 성공
+
+화면 증거:
+
+```text
+NFS root mounted
+Mounting root file system ... done
+can't run '/etc/init.d/rcS': No such file or directory
+Please press Enter to activate this console.
+```
+
+처음 하네스가 이를 `NFS_MOUNT_FAIL`로 오판했지만, 콘솔 증거를 반영하도록 verdict 로직을 고쳤습니다.
+
+정정된 verdict:
+
+```text
+INIT_EXEC_REACHED_BUSYBOX_RC_MISSING
+```
+
+의미:
+
+- haneWIN minimal profile은 NFS root mount에 성공했습니다.
+- `/usr/sbin/init` 실행도 성공했습니다.
+- 멈춘 이유는 진단용 BusyBox init이 `/etc/init.d/rcS`를 찾기 때문입니다.
+
+조치:
+
+- 원래 systemd init을 복원했습니다.
+- `BOOT-NFS-BUSYBOX-DIAGNOSTIC.txt` marker를 제거하도록 `init-diagnostic.ps1`를 고쳤습니다.
+
+## 14:43 - haneWIN minimal + systemd 재시험 시작
+
+Attempt:
+
+```text
+20260519-144335-d80c0b88-hanewin-systemd-explicit
+```
+
+현재 사용자 RPi4 전원 재연결 대기 중입니다.

@@ -91,3 +91,16 @@ cmdline: nfsroot=10.73.0.10:/rpi/d80c0b88,vers=3
 ```
 
 이 시도는 `udp`, `nolock`, `rsize`, `wsize`, `nfsrootdebug`를 제거해 haneWIN 공식 예시에 더 가깝게 맞춘 것입니다. 사용자가 RPi4 전원을 뺐다 꽂으면 하네스가 이 attempt의 로그를 비교합니다.
+
+결과: 이 최소 profile은 NFS root mount와 진단용 BusyBox init 실행까지 성공했습니다.
+
+```text
+verdict: INIT_EXEC_REACHED_BUSYBOX_RC_MISSING
+```
+
+원래 systemd init을 복원했고, 다음 systemd 재시험 attempt를 시작했습니다.
+
+```text
+attempt: 20260519-144335-d80c0b88-hanewin-systemd-explicit
+cmdline: nfsroot=10.73.0.10:/rpi/d80c0b88,vers=3 init=/usr/sbin/init
+```
