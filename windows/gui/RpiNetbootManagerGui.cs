@@ -73,6 +73,7 @@ namespace RpiNetbootWindowsGui
         private Process runningProcess;
         private bool isRunning;
         private string selectedTask = "status";
+        private CloneRpi4Request pendingCloneRequest;
         private readonly bool autoRunInitialTask;
 
         private readonly Color bg = Color.FromArgb(245, 247, 248);
@@ -135,6 +136,7 @@ namespace RpiNetbootWindowsGui
             actions.Add(new ActionDefinition("copy-boot", "RPi4 부팅파일 복사", "RPi4 OS boot 파티션 파일을 D:\\tftp\\<serial>로 복사합니다.", IconKind.SdCard, false));
             actions.Add(new ActionDefinition("rootfs-status", "rootfs 상태 확인", "D:\\rootfs\\<serial>에 init, bin, etc, usr가 있는지 확인합니다.", IconKind.Check, false));
             actions.Add(new ActionDefinition("rootfs-prepare", "rootfs 준비 안내 만들기", "Pi/Linux helper에서 실행할 rootfs 복제 스크립트와 안내문을 만듭니다.", IconKind.Doc, false));
+            actions.Add(new ActionDefinition("clone-rpi4", "새 RPi4 등록/복제", "기기 번호, 시리얼, MAC을 입력해 새 RPi4의 bootfs/rootfs와 내부 설정을 만듭니다.", IconKind.Package, false));
             actions.Add(new ActionDefinition("zero2w-gadget-sd", "Zero 2 W gadget SD", "S: SD를 Zero 2 W USB Ethernet gadget 부팅용으로 패치합니다.", IconKind.SdCard, false, true));
             actions.Add(new ActionDefinition("verify", "전체 상태 다시 확인", "랩 상태와 TFTP 파일 무결성을 확인합니다. 네트워크 부팅 대상은 RPi4만입니다.", IconKind.Check, false));
             actions.Add(new ActionDefinition("sync-tftp", "TFTP 파일 복사/검증", "generated 파일을 D:\\tftp로 복사하고 cmdline/config 깨짐을 검사합니다.", IconKind.Sync, false));
@@ -607,6 +609,10 @@ namespace RpiNetbootWindowsGui
             {
                 return "주의: D:\\tftp 파일 복사와 무결성 검사";
             }
+            if (action.Task == "clone-rpi4")
+            {
+                return "주의: 새 RPi4 client 생성, 기존 성공 client는 보호";
+            }
             return "안전: 읽기 전용 확인 작업";
         }
 
@@ -624,6 +630,7 @@ namespace RpiNetbootWindowsGui
                 case "copy-boot": return "부팅파일 복사 실행";
                 case "rootfs-status": return "rootfs 상태 확인";
                 case "rootfs-prepare": return "rootfs 안내 만들기";
+                case "clone-rpi4": return "새 RPi4 복제 시작";
                 case "zero2w-gadget-sd": return "gadget SD 패치";
                 case "verify": return "전체 상태 다시 확인";
                 case "sync-tftp": return "TFTP 복사/검증 실행";
@@ -658,6 +665,8 @@ namespace RpiNetbootWindowsGui
                     return "테스트 RPi4의 rootfs 폴더를 확인합니다. D:\\rootfs\\<serial> 안에 init, bin, etc, usr가 있어야 커널 이후 부팅됩니다.\n\n비어 있으면 rootfs 준비 안내 만들기를 누르세요.";
                 case "rootfs-prepare":
                     return "Windows 탐색기 복사 대신 Pi/Linux helper용 rsync 스크립트를 만듭니다. Linux 권한, 소유자, 심볼릭 링크를 보존하기 위한 흐름입니다.\n\n생성 위치: D:\\downloads";
+                case "clone-rpi4":
+                    return "새 Raspberry Pi 4를 등록하고 현재 성공한 d80c0b88 bootfs/rootfs에서 복제합니다.\n\n입력 예:\n- 기기 번호: rpi-001\n- 시리얼: 8자리 hex\n- MAC: 88:a2:9e:xx:xx:xx\n\n자동 반영:\n- D:\\tftp\\<serial>\n- D:\\rootfs\\<serial>\n- hostname\n- /etc/rpi-netboot/client.json\n- machine-id/SSH host key 초기화\n\nhaneWIN은 운영 provider로 쓰지 않습니다. 복제 후에는 무료 provider 또는 Linux NFS provider로 검증합니다.";
                 case "zero2w-gadget-sd":
                     return "Zero 2 W는 네트워크 부팅 대상이 아닙니다. S:의 Raspberry Pi OS boot 파티션을 USB Ethernet gadget용으로 패치합니다.\n\n연결: PWR IN이 아니라 mini HDMI 옆 USB data 포트를 PC에 꽂습니다.";
                 case "verify":
@@ -712,6 +721,15 @@ namespace RpiNetbootWindowsGui
                 return;
             }
 
+            if (action.Task == "clone-rpi4")
+            {
+                using (var dialog = new CloneRpi4Dialog())
+                {
+                    if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                    pendingCloneRequest = dialog.Request;
+                }
+            }
+
             if (action.RequiresAdmin && !IsCurrentProcessAdmin())
             {
                 LaunchAdmin(action.Task);
@@ -731,6 +749,10 @@ namespace RpiNetbootWindowsGui
 
             string args = BuildPowerShellArguments(action);
             RunPowerShell(action.Title, args);
+            if (action.Task == "clone-rpi4")
+            {
+                pendingCloneRequest = null;
+            }
         }
 
         private string BuildPowerShellArguments(ActionDefinition action)
@@ -757,6 +779,21 @@ namespace RpiNetbootWindowsGui
                 case "zero2w-gadget-sd":
                     toolPath = Path.Combine(projectRoot, "tools", "zero2w-gadget-sd.ps1");
                     return commandPrefix + "& " + PsSingle(toolPath) + " apply -DriveLetter S -Yes 3>&1 4>&1 5>&1 6>&1";
+                case "clone-rpi4":
+                    if (pendingCloneRequest == null) throw new InvalidOperationException("Clone request is missing.");
+                    toolPath = Path.Combine(projectRoot, "tools", "clone-rpi4-client.ps1");
+                    string configPath = Path.Combine(projectRoot, "lab-10.73.json");
+                    string cloneCommand = commandPrefix + "& " + PsSingle(toolPath) +
+                        " clone -Config " + PsSingle(configPath) +
+                        " -GoldenSerial d80c0b88" +
+                        " -DeviceId " + PsSingle(pendingCloneRequest.DeviceId) +
+                        " -Serial " + PsSingle(pendingCloneRequest.Serial) +
+                        " -Mac " + PsSingle(pendingCloneRequest.Mac);
+                    if (!string.IsNullOrWhiteSpace(pendingCloneRequest.Ip))
+                    {
+                        cloneCommand += " -Ip " + PsSingle(pendingCloneRequest.Ip);
+                    }
+                    return cloneCommand + " 3>&1 4>&1 5>&1 6>&1";
             }
 
             string command = "$enc=New-Object System.Text.UTF8Encoding -ArgumentList $false; " +
@@ -1055,6 +1092,203 @@ namespace RpiNetbootWindowsGui
         public ActionDefinition(string task, string title, string description, IconKind icon, bool requiresAdmin)
             : this(task, title, description, icon, requiresAdmin, false)
         {
+        }
+    }
+
+    internal sealed class CloneRpi4Request
+    {
+        public string DeviceId;
+        public string Serial;
+        public string Mac;
+        public string Ip;
+    }
+
+    internal sealed class CloneRpi4Dialog : Form
+    {
+        private readonly TextBox deviceIdBox;
+        private readonly TextBox serialBox;
+        private readonly TextBox macBox;
+        private readonly TextBox ipBox;
+        private readonly Label errorLabel;
+
+        public CloneRpi4Request Request { get; private set; }
+
+        public CloneRpi4Dialog()
+        {
+            Text = "새 RPi4 등록/복제";
+            StartPosition = FormStartPosition.CenterParent;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            ClientSize = new Size(560, 430);
+            BackColor = Color.FromArgb(245, 247, 248);
+            Font = new Font("Segoe UI", 9.5f);
+
+            var root = new TableLayoutPanel();
+            root.Dock = DockStyle.Fill;
+            root.Padding = new Padding(24);
+            root.ColumnCount = 1;
+            root.RowCount = 5;
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 208));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+            Controls.Add(root);
+
+            var title = new Label();
+            title.Text = "새 Raspberry Pi 4 만들기";
+            title.ForeColor = Color.FromArgb(26, 33, 30);
+            title.Font = new Font("Segoe UI Semibold", 19f, FontStyle.Bold);
+            title.Dock = DockStyle.Top;
+            title.Height = 36;
+            root.Controls.Add(title, 0, 0);
+
+            var subtitle = new Label();
+            subtitle.Text = "기기 번호를 기준으로 bootfs, rootfs, hostname, 내부 설정 파일을 만듭니다. haneWIN은 운영 provider로 쓰지 않습니다.";
+            subtitle.ForeColor = Color.FromArgb(82, 96, 88);
+            subtitle.Font = new Font("Segoe UI", 10f);
+            subtitle.Dock = DockStyle.Fill;
+            subtitle.Top = 38;
+            subtitle.Padding = new Padding(0, 38, 0, 0);
+            root.Controls.Add(subtitle, 0, 0);
+            subtitle.BringToFront();
+
+            var fields = new TableLayoutPanel();
+            fields.Dock = DockStyle.Fill;
+            fields.ColumnCount = 2;
+            fields.RowCount = 4;
+            fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+            fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            for (int i = 0; i < 4; i++) fields.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+            root.Controls.Add(fields, 0, 1);
+
+            deviceIdBox = AddField(fields, 0, "기기 번호", "rpi-001");
+            serialBox = AddField(fields, 1, "RPi4 시리얼", "8자리 hex, 예: a1b2c3d4");
+            macBox = AddField(fields, 2, "MAC 주소", "88:a2:9e:xx:xx:xx");
+            ipBox = AddField(fields, 3, "예약 IP", "비워두면 자동 할당");
+
+            var note = new Label();
+            note.Text = "현재 골든 소스: D:\\tftp\\d80c0b88, D:\\rootfs\\d80c0b88";
+            note.ForeColor = Color.FromArgb(15, 118, 110);
+            note.BackColor = Color.FromArgb(220, 244, 239);
+            note.TextAlign = ContentAlignment.MiddleLeft;
+            note.Padding = new Padding(14, 0, 14, 0);
+            note.Dock = DockStyle.Fill;
+            root.Controls.Add(note, 0, 2);
+
+            errorLabel = new Label();
+            errorLabel.Text = "";
+            errorLabel.ForeColor = Color.FromArgb(180, 35, 24);
+            errorLabel.Dock = DockStyle.Fill;
+            errorLabel.Padding = new Padding(2, 10, 2, 0);
+            root.Controls.Add(errorLabel, 0, 3);
+
+            var buttons = new FlowLayoutPanel();
+            buttons.Dock = DockStyle.Fill;
+            buttons.FlowDirection = FlowDirection.RightToLeft;
+            buttons.WrapContents = false;
+            root.Controls.Add(buttons, 0, 4);
+
+            var ok = CreateDialogButton("등록 및 복제", Color.FromArgb(15, 118, 110), Color.White);
+            ok.Click += delegate { Submit(); };
+            buttons.Controls.Add(ok);
+            AcceptButton = ok;
+
+            var cancel = CreateDialogButton("취소", Color.FromArgb(237, 241, 236), Color.FromArgb(26, 33, 30));
+            cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
+            buttons.Controls.Add(cancel);
+            CancelButton = cancel;
+        }
+
+        private TextBox AddField(TableLayoutPanel fields, int row, string label, string placeholder)
+        {
+            var lab = new Label();
+            lab.Text = label;
+            lab.Dock = DockStyle.Fill;
+            lab.TextAlign = ContentAlignment.MiddleLeft;
+            lab.ForeColor = Color.FromArgb(26, 33, 30);
+            lab.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+            fields.Controls.Add(lab, 0, row);
+
+            var box = new TextBox();
+            box.Dock = DockStyle.Fill;
+            box.Font = new Font("Segoe UI", 10.5f);
+            box.Margin = new Padding(0, 9, 0, 8);
+            box.AccessibleName = label;
+            box.Text = "";
+            box.Tag = placeholder;
+            fields.Controls.Add(box, 1, row);
+            return box;
+        }
+
+        private Button CreateDialogButton(string text, Color fill, Color textColor)
+        {
+            var button = new Button();
+            button.Text = text;
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 0;
+            button.BackColor = fill;
+            button.ForeColor = textColor;
+            button.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+            button.Size = new Size(128, 44);
+            button.Margin = new Padding(8, 6, 0, 6);
+            button.Cursor = Cursors.Hand;
+            return button;
+        }
+
+        private void Submit()
+        {
+            string deviceId = Normalize(deviceIdBox.Text);
+            string serial = Normalize(serialBox.Text);
+            string mac = Normalize(macBox.Text);
+            string ip = Normalize(ipBox.Text);
+
+            if (!IsDeviceId(deviceId))
+            {
+                ShowError("기기 번호는 rpi-001처럼 영문/숫자/하이픈으로 입력하세요.");
+                return;
+            }
+            if (!System.Text.RegularExpressions.Regex.IsMatch(serial, "^[0-9a-fA-F]{8}$"))
+            {
+                ShowError("RPi4 시리얼은 8자리 hex여야 합니다.");
+                return;
+            }
+            if (!System.Text.RegularExpressions.Regex.IsMatch(mac, "^([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}$"))
+            {
+                ShowError("MAC 주소 형식을 확인하세요. 예: 88:a2:9e:4f:a9:b1");
+                return;
+            }
+            if (ip.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(ip, "^10\\.73\\.0\\.([1-9][0-9]?|1[0-9]{2}|2[0-4][0-9]|25[0-4])$"))
+            {
+                ShowError("예약 IP는 10.73.0.x 대역이어야 합니다. 비우면 자동 할당됩니다.");
+                return;
+            }
+
+            Request = new CloneRpi4Request
+            {
+                DeviceId = deviceId.ToLowerInvariant(),
+                Serial = serial.ToLowerInvariant(),
+                Mac = mac.ToLowerInvariant().Replace("-", ":"),
+                Ip = ip
+            };
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+
+        private bool IsDeviceId(string value)
+        {
+            return System.Text.RegularExpressions.Regex.IsMatch(value, "^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]$");
+        }
+
+        private string Normalize(string value)
+        {
+            return (value ?? "").Trim();
+        }
+
+        private void ShowError(string message)
+        {
+            errorLabel.Text = message;
         }
     }
 

@@ -45,6 +45,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\clone-rpi4-c
 powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\clone-rpi4-client.ps1 clone `
   -Config .\windows\lab-10.73.json `
   -GoldenSerial d80c0b88 `
+  -DeviceId rpi-001 `
   -Serial <새Pi8자리시리얼> `
   -Mac <새PiMAC주소>
 ```
@@ -58,7 +59,31 @@ IP를 지정하지 않으면 `10.73.0.100-199` 범위에서 다음 빈 주소를
 - `D:\rootfs\d80c0b88`를 `D:\rootfs\<serial>`로 복제합니다.
 - 새 `cmdline.txt`가 `/rpi/<serial>` rootfs를 보도록 고칩니다.
 - `etc/hostname`, `etc/hosts`, `etc/machine-id`, SSH host key를 새 Pi용으로 정리합니다.
+- `/etc/rpi-netboot/client.json`과 `/etc/rpi-netboot/client.env`를 만들어 내부 프로그램이 `rpi-001` 같은 기기 번호를 읽을 수 있게 합니다.
+- cloud-init이 hostname/hosts를 다시 덮어쓰지 않도록 `99-rpi-netboot-identity.cfg`를 넣습니다.
 - 기존 성공 client `d80c0b88`는 덮어쓰지 않습니다.
+
+## UI에서 새 기기 만들기
+
+프로그램에서 `새 RPi4 등록/복제`를 누르면 아래 값을 입력합니다.
+
+| 입력 | 예시 | 의미 |
+| --- | --- | --- |
+| 기기 번호 | `rpi-001` | hostname과 내부 프로그램용 device id |
+| RPi4 시리얼 | `a1b2c3d4` | TFTP/rootfs 폴더 이름 |
+| MAC 주소 | `88:a2:9e:aa:bb:cc` | DHCP 예약 |
+| 예약 IP | 비움 또는 `10.73.0.160` | 비우면 자동 할당 |
+
+완료 후 생성되는 내부 설정:
+
+```text
+/etc/hostname
+/etc/hosts
+/etc/rpi-netboot/client.json
+/etc/rpi-netboot/client.env
+```
+
+`client.json`에는 device id, serial, MAC, IP, 서버 IP가 들어갑니다. 지금 Zero 2 W gadget peer는 `10.73.0.11` 힌트로 남깁니다.
 
 ## 안전 규칙
 

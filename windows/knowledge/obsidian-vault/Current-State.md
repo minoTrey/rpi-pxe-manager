@@ -56,3 +56,5 @@ Current clone source:
 bootfs: D:\tftp\d80c0b88
 rootfs: D:\rootfs\d80c0b88
 ```
+
+The GUI now has a `새 RPi4 등록/복제` flow. The operator enters a device id like `rpi-001`, the Pi serial, and the MAC address. The clone workflow writes the device id into hostname plus `/etc/rpi-netboot/client.json` for internal programs.

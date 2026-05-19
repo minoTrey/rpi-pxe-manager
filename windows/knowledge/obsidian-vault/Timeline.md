@@ -14,3 +14,4 @@
 - 14:43 - Restored original systemd init and started `20260519-144335-d80c0b88-hanewin-systemd-explicit`.
 - 15:12 - User reported successful RPi4 boot; harness records `BOOT_REACHED_USERSPACE`.
 - 15:15 - Added `clone-rpi4-client.ps1` so new RPi4 devices can be registered and cloned from the known-good `d80c0b88` bootfs/rootfs pair.
+- 15:45 - Added Device ID based GUI flow. `rpi-001` now becomes hostname plus `/etc/rpi-netboot/client.json` metadata for cloned RPi4 rootfs.
