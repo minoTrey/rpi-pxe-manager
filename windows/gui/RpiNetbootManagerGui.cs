@@ -127,22 +127,12 @@ namespace RpiNetbootWindowsGui
         private void BuildActions()
         {
             actions.Add(new ActionDefinition("status", "상태 확인", "RPi4 네트워크 부팅 상태를 읽기 전용으로 확인합니다.", IconKind.Pulse, false));
-            actions.Add(new ActionDefinition("server-setup", "서버 PC 자동 준비", "D: 저장소, 이더넷 10.73.0.10, 설정 파일, TFTP 동기화까지 정리합니다.", IconKind.Server, true));
-            actions.Add(new ActionDefinition("lite-provider-start", "무료 부팅 서비스 시작", "내장 DHCP/TFTP 서버와 무료 WinNFSd를 시작합니다. haneWIN 평가판 없이 테스트할 기본 provider입니다.", IconKind.Network, true));
-            actions.Add(new ActionDefinition("lite-provider-stop", "무료 부팅 서비스 중지", "내장 DHCP/TFTP 서버와 WinNFSd를 중지합니다. 테스트 종료나 포트 정리 때 사용합니다.", IconKind.Shield, true));
-            actions.Add(new ActionDefinition("install-services", "haneWIN 평가판 설치", "haneWIN은 빠른 검증용 30일 평가판 provider입니다. 무료 provider가 안 될 때만 보조로 사용합니다.", IconKind.Package, true));
-            actions.Add(new ActionDefinition("configure-services", "haneWIN 설정 적용", "haneWIN DHCP/TFTP/NFS를 이더넷 10.73.0.10, D:\\tftp, D:\\rootfs 값으로 맞춥니다.", IconKind.Sync, true));
-            actions.Add(new ActionDefinition("prepare-sd", "RPi4 EEPROM SD 쓰기", "S: SD카드에 RPi4 Network Boot EEPROM 이미지를 씁니다.", IconKind.SdCard, true, true));
-            actions.Add(new ActionDefinition("copy-boot", "RPi4 부팅파일 복사", "RPi4 OS boot 파티션 파일을 D:\\tftp\\<serial>로 복사합니다.", IconKind.SdCard, false));
-            actions.Add(new ActionDefinition("rootfs-status", "rootfs 상태 확인", "D:\\rootfs\\<serial>에 init, bin, etc, usr가 있는지 확인합니다.", IconKind.Check, false));
-            actions.Add(new ActionDefinition("rootfs-prepare", "rootfs 준비 안내 만들기", "Pi/Linux helper에서 실행할 rootfs 복제 스크립트와 안내문을 만듭니다.", IconKind.Doc, false));
+            actions.Add(new ActionDefinition("server-setup", "서버 PC 준비", "D: 저장소와 이더넷 10.73.0.10 구성을 자동으로 맞춥니다.", IconKind.Server, true));
+            actions.Add(new ActionDefinition("lite-provider-start", "부팅 서비스 시작", "DHCP, TFTP, NFS 서비스를 시작해 RPi4 네트워크 부팅을 받을 준비를 합니다.", IconKind.Network, true));
             actions.Add(new ActionDefinition("clone-rpi4", "새 RPi4 등록/복제", "기기 번호, 시리얼, MAC을 입력해 새 RPi4의 bootfs/rootfs와 내부 설정을 만듭니다.", IconKind.Package, false));
-            actions.Add(new ActionDefinition("zero2w-gadget-sd", "Zero 2 W gadget SD", "S: SD를 Zero 2 W USB Ethernet gadget 부팅용으로 패치합니다.", IconKind.SdCard, false, true));
-            actions.Add(new ActionDefinition("verify", "전체 상태 다시 확인", "랩 상태와 TFTP 파일 무결성을 확인합니다. 네트워크 부팅 대상은 RPi4만입니다.", IconKind.Check, false));
-            actions.Add(new ActionDefinition("sync-tftp", "TFTP 파일 복사/검증", "generated 파일을 D:\\tftp로 복사하고 cmdline/config 깨짐을 검사합니다.", IconKind.Sync, false));
-            actions.Add(new ActionDefinition("firewall", "부팅 포트 방화벽 열기", "DHCP, TFTP, NFS, iSCSI에 필요한 Windows 방화벽 규칙을 추가합니다.", IconKind.Shield, true));
-            actions.Add(new ActionDefinition("restore-network", "이더넷을 DHCP로 복구", "유선 이더넷을 DHCP 모드로 되돌립니다. 테스트 종료나 롤백 때 사용합니다.", IconKind.Network, true, true));
-            actions.Add(new ActionDefinition("docs", "도움말 문서 열기", "자동화, SD카드, RPi4 네트워크 부팅 문서 폴더를 엽니다.", IconKind.Doc, false));
+            actions.Add(new ActionDefinition("prepare-sd", "RPi4 EEPROM SD", "S: SD카드에 RPi4 Network Boot EEPROM 이미지를 씁니다.", IconKind.SdCard, true, true));
+            actions.Add(new ActionDefinition("zero2w-gadget-sd", "Zero 2 W Gadget SD", "S: SD를 Zero 2 W USB Ethernet gadget 부팅용으로 패치합니다.", IconKind.SdCard, false, true));
+            actions.Add(new ActionDefinition("docs", "도움말", "운영 절차와 복제 Runbook을 엽니다.", IconKind.Doc, false));
         }
 
         private void BuildUi()
@@ -256,7 +246,7 @@ namespace RpiNetbootWindowsGui
             info.Controls.Add(infoTitle);
 
             var infoText = new Label();
-            infoText.Text = "1 상태 확인\n2 무료 서비스 시작\n3 boot 복사\n4 rootfs 준비\n5 RPi4 재부팅";
+            infoText.Text = "1 상태 확인\n2 서버 PC 준비\n3 부팅 서비스 시작\n4 새 RPi4 등록/복제\n5 전원 재인가";
             infoText.ForeColor = sidebarMuted;
             infoText.Font = new Font("Segoe UI", 9.2f);
             infoText.Dock = DockStyle.Fill;
@@ -341,9 +331,9 @@ namespace RpiNetbootWindowsGui
             layout.SetColumnSpan(cards, 2);
 
             cards.Controls.Add(CreateMetricCard("서버 PC", "10.73.0.10", "유선 이더넷 고정 IP"), 0, 0);
-            cards.Controls.Add(CreateMetricCard("저장소", "D:\\", "tftp / rootfs / downloads"), 1, 0);
-            cards.Controls.Add(CreateMetricCard("넷부팅 대상", "RPi4만", "Zero 2 W는 SD 부팅"), 2, 0);
-            cards.Controls.Add(CreateMetricCard("현재 핵심", "rootfs", "D:\\rootfs\\<serial> 채우기"), 3, 0);
+            cards.Controls.Add(CreateMetricCard("저장소", "D:\\", "tftp / rootfs / tools"), 1, 0);
+            cards.Controls.Add(CreateMetricCard("새 기기", "rpi-001", "기기 번호 기반 복제"), 2, 0);
+            cards.Controls.Add(CreateMetricCard("넷부팅 대상", "RPi4", "Zero 2 W는 Gadget SD"), 3, 0);
 
             var taskPanel = new SoftPanel();
             taskPanel.Dock = DockStyle.Fill;
@@ -405,7 +395,7 @@ namespace RpiNetbootWindowsGui
             secondaryButton.Width = 132;
             secondaryButton.Margin = new Padding(0, 0, 8, 8);
             secondaryButton.AccessibleName = "문서 폴더 열기";
-            tips.SetToolTip(secondaryButton, "자동화 사용법과 테스트 체크리스트가 들어 있는 docs 폴더를 엽니다.");
+            tips.SetToolTip(secondaryButton, "자동화 사용법과 운영 문서가 들어 있는 docs 폴더를 엽니다.");
             secondaryButton.Click += delegate { OpenDocsFolder(); };
             actionRow.Controls.Add(secondaryButton);
 
@@ -605,10 +595,6 @@ namespace RpiNetbootWindowsGui
             {
                 return "주의: 관리자 권한 필요, Windows 시스템 설정 변경";
             }
-            if (action.Task == "sync-tftp")
-            {
-                return "주의: D:\\tftp 파일 복사와 무결성 검사";
-            }
             if (action.Task == "clone-rpi4")
             {
                 return "주의: 새 RPi4 client 생성, 기존 성공 client는 보호";
@@ -621,21 +607,11 @@ namespace RpiNetbootWindowsGui
             switch (action.Task)
             {
                 case "status": return "상태 확인 실행";
-                case "server-setup": return "서버 PC 자동 준비";
-                case "lite-provider-start": return "무료 서비스 시작";
-                case "lite-provider-stop": return "무료 서비스 중지";
-                case "install-services": return "haneWIN 설치 실행";
-                case "configure-services": return "haneWIN 설정 적용";
+                case "server-setup": return "서버 PC 준비";
+                case "lite-provider-start": return "서비스 시작";
                 case "prepare-sd": return "SD카드에 EEPROM 쓰기";
-                case "copy-boot": return "부팅파일 복사 실행";
-                case "rootfs-status": return "rootfs 상태 확인";
-                case "rootfs-prepare": return "rootfs 안내 만들기";
                 case "clone-rpi4": return "새 RPi4 복제 시작";
                 case "zero2w-gadget-sd": return "gadget SD 패치";
-                case "verify": return "전체 상태 다시 확인";
-                case "sync-tftp": return "TFTP 복사/검증 실행";
-                case "firewall": return "방화벽 규칙 적용";
-                case "restore-network": return "이더넷 DHCP로 복구";
                 case "docs": return "도움말 문서 열기";
                 default: return "실행";
             }
@@ -646,39 +622,19 @@ namespace RpiNetbootWindowsGui
             switch (task)
             {
                 case "status":
-                    return "처음에는 이 버튼을 누르세요. D: 저장소, S: SD카드, 이더넷 IP, 공유기 연결, 서비스 포트 상태를 읽기 전용으로 확인합니다.\n\n다음: 정상이면 무료 부팅 서비스 시작으로, 문제가 있으면 서버 PC 자동 준비로 갑니다.";
+                    return "처음에는 이 버튼을 누르세요. D: 저장소, 이더넷 IP, 공유기 연결, 서비스 포트 상태를 읽기 전용으로 확인합니다.\n\n정상이면 부팅 서비스 시작 또는 새 RPi4 등록/복제로 넘어갑니다.";
                 case "server-setup":
-                    return "서버 PC를 네트워크 부팅용으로 맞춥니다. D:\\ 바로 아래에 tftp/rootfs/downloads를 만들고 유선 이더넷을 10.73.0.10으로 적용합니다.\n\n다음: 무료 부팅 서비스 시작을 누릅니다.";
+                    return "서버 PC를 네트워크 부팅용으로 맞춥니다. D:\\ 바로 아래에 tftp/rootfs/tools 구조를 확인하고 유선 이더넷을 10.73.0.10으로 적용합니다.\n\n다음: 부팅 서비스 시작을 누릅니다.";
                 case "lite-provider-start":
-                    return "haneWIN 없이 테스트하기 위한 무료 provider입니다. 프로그램이 자체 DHCP/TFTP 서버를 빌드하고, WinNFSd를 내려받아 D:\\rootfs를 /rpi로 공유합니다.\n\n실행하면 기존 haneWIN 서비스는 포트 충돌을 피하려고 중지됩니다. 다음: 전체 상태 다시 확인을 누르고 Pi 전원을 다시 넣습니다.";
-                case "lite-provider-stop":
-                    return "무료 provider가 차지한 DHCP/TFTP/NFS 포트를 정리합니다. 테스트를 멈추거나 다른 provider를 쓰기 전에 누릅니다.\n\n다음: 필요하면 haneWIN 설정 또는 무료 부팅 서비스 시작을 다시 선택합니다.";
-                case "install-services":
-                    return "haneWIN DHCP/TFTP/NFS를 설치합니다. 이 도구는 실제 제품이고 내가 만든 이름은 아니지만, 미등록 상태에서는 30일 평가판입니다.\n\n기본 테스트는 무료 부팅 서비스 시작을 먼저 쓰세요. haneWIN은 빠른 비교/검증용 보조 provider로만 봅니다.";
-                case "configure-services":
-                    return "haneWIN을 실제 랩 설정에 맞춥니다. DHCP는 이더넷 10.73.0.10에만 응답하게 하고, Pi 예약 IP 60대, TFTP root D:\\tftp, NFS export D:\\rootfs -> /rpi를 적용합니다.\n\n무료 provider가 안 될 때의 비교용 경로입니다.";
+                    return "RPi4가 네트워크 부팅 요청을 보낼 때 응답할 DHCP/TFTP/NFS 서비스를 시작합니다.\n\n다음: 상태 확인을 누르고 새 RPi4 전원을 다시 넣습니다.";
                 case "prepare-sd":
                     return "RPi4 전용입니다. S: SD카드만 지웁니다. D: rpi 저장소는 선택하면 안 됩니다.\n\n다음: RPi4를 이 SD카드로 한 번 부팅합니다. Zero 2 W용 SD는 별도 버튼을 쓰세요.";
-                case "copy-boot":
-                    return "RPi4용 boot 파티션이 필요합니다. EEPROM SD가 아닙니다. start4.elf/fixup4.dat가 있는 FAT32 파티션을 TFTP 폴더로 복사합니다.\n\n다음: rootfs 상태 확인을 누릅니다.";
-                case "rootfs-status":
-                    return "테스트 RPi4의 rootfs 폴더를 확인합니다. D:\\rootfs\\<serial> 안에 init, bin, etc, usr가 있어야 커널 이후 부팅됩니다.\n\n비어 있으면 rootfs 준비 안내 만들기를 누르세요.";
-                case "rootfs-prepare":
-                    return "Windows 탐색기 복사 대신 Pi/Linux helper용 rsync 스크립트를 만듭니다. Linux 권한, 소유자, 심볼릭 링크를 보존하기 위한 흐름입니다.\n\n생성 위치: D:\\downloads";
                 case "clone-rpi4":
-                    return "새 Raspberry Pi 4를 등록하고 현재 성공한 d80c0b88 bootfs/rootfs에서 복제합니다.\n\n입력 예:\n- 기기 번호: rpi-001\n- 시리얼: 8자리 hex\n- MAC: 88:a2:9e:xx:xx:xx\n\n자동 반영:\n- D:\\tftp\\<serial>\n- D:\\rootfs\\<serial>\n- hostname\n- /etc/rpi-netboot/client.json\n- machine-id/SSH host key 초기화\n\nhaneWIN은 운영 provider로 쓰지 않습니다. 복제 후에는 무료 provider 또는 Linux NFS provider로 검증합니다.";
+                    return "새 Raspberry Pi 4를 등록하고 현재 성공한 bootfs/rootfs에서 복제합니다.\n\n입력 예:\n- 기기 번호: rpi-001\n- 시리얼: 8자리 hex\n- MAC: 88:a2:9e:xx:xx:xx\n\n자동 반영:\n- D:\\tftp\\<serial>\n- D:\\rootfs\\<serial>\n- hostname\n- /etc/rpi-netboot/client.json\n- machine-id/SSH host key 초기화";
                 case "zero2w-gadget-sd":
                     return "Zero 2 W는 네트워크 부팅 대상이 아닙니다. S:의 Raspberry Pi OS boot 파티션을 USB Ethernet gadget용으로 패치합니다.\n\n연결: PWR IN이 아니라 mini HDMI 옆 USB data 포트를 PC에 꽂습니다.";
-                case "verify":
-                    return "무료 부팅 서비스 시작 후에 누릅니다. UDP 67/69, NFS 2049, TFTP 파일, rootfs 흐름을 다시 봅니다.\n\n네트워크 부팅 테스트 대상은 RPi4만입니다.";
-                case "sync-tftp":
-                    return "생성된 cmdline/config를 D:\\tftp에 다시 반영합니다. 파일이 NUL로 깨지는 문제를 잡기 위해 검증도 같이 합니다.\n\n다음: 전체 상태 다시 확인으로 파일과 포트를 확인합니다.";
-                case "firewall":
-                    return "Windows 방화벽에서 DHCP, TFTP, NFS, iSCSI 포트를 열어줍니다. 네트워크 부팅 서비스를 실행하기 전에 적용합니다.\n\n다음: 서비스 설치 또는 전체 상태 다시 확인을 진행합니다.";
-                case "restore-network":
-                    return "테스트망을 정리하거나 원래 인터넷 환경으로 되돌릴 때 유선 이더넷을 DHCP로 복구합니다.\n\n다음: 필요하면 공유기/PC 네트워크를 원래 구성으로 되돌립니다.";
                 case "docs":
-                    return "현재 자동화 흐름과 첫 Pi 테스트 절차가 적힌 문서 폴더를 엽니다.";
+                    return "새 RPi4 등록/복제 Runbook과 운영 문서를 엽니다.";
                 default:
                     return "";
             }
@@ -770,12 +726,6 @@ namespace RpiNetbootWindowsGui
             string toolPath;
             switch (action.Task)
             {
-                case "rootfs-status":
-                    toolPath = Path.Combine(projectRoot, "tools", "rootfs-helper.ps1");
-                    return commandPrefix + "& " + PsSingle(toolPath) + " status 3>&1 4>&1 5>&1 6>&1";
-                case "rootfs-prepare":
-                    toolPath = Path.Combine(projectRoot, "tools", "rootfs-helper.ps1");
-                    return commandPrefix + "& " + PsSingle(toolPath) + " make-script 3>&1 4>&1 5>&1 6>&1";
                 case "zero2w-gadget-sd":
                     toolPath = Path.Combine(projectRoot, "tools", "zero2w-gadget-sd.ps1");
                     return commandPrefix + "& " + PsSingle(toolPath) + " apply -DriveLetter S -Yes 3>&1 4>&1 5>&1 6>&1";
@@ -820,21 +770,11 @@ namespace RpiNetbootWindowsGui
                 case "server-setup":
                     return "서버 PC 자동 준비를 실행합니다.\n\n변경 대상:\n- 유선 이더넷 IP: 10.73.0.10\n- 저장소 구조: D:\\tftp, D:\\rootfs, D:\\downloads\n- TFTP 파일 동기화와 방화벽 규칙\n\nD:가 rpi 저장소이고 이 PC가 서버 PC이면 [예]를 누르세요.";
                 case "lite-provider-start":
-                    return "무료 부팅 서비스 provider를 시작합니다.\n\n실행 내용:\n- 내장 DHCP/TFTP 서버 빌드 및 시작\n- WinNFSd 다운로드 및 NFS 시작\n- haneWIN DHCP/TFTP/NFS 서비스 중지\n- DHCP/TFTP/NFS 방화벽 규칙 확인\n\nPi가 다음 DHCP에서 10.73.0.155 같은 예약 IP를 받게 됩니다. 계속하려면 [예]를 누르세요.";
-                case "lite-provider-stop":
-                    return "무료 부팅 서비스 provider를 중지합니다.\n\n중지 대상:\n- 내장 DHCP/TFTP 서버\n- WinNFSd NFS 서버\n\n테스트를 멈추거나 다른 provider로 전환할 때만 [예]를 누르세요.";
-                case "install-services":
-                    return "haneWIN 평가판 설치를 실행합니다.\n\nPi 부팅에 필요한 역할:\n- DHCP: Pi에게 부팅 서버 주소 안내\n- TFTP: 커널/부팅 파일 전달\n- NFS: rootfs 폴더 제공\n\n현재 설치되는 haneWIN DHCP/TFTP/NFS는 빠른 검증용 30일 평가판 provider입니다. 기본 테스트는 무료 부팅 서비스 시작 버튼을 우선 사용합니다.\n\nhaneWIN 비교 테스트가 필요하면 [예]를 누르세요.";
-                case "configure-services":
-                    return "부팅 서비스 설정을 실제 랩 값으로 적용합니다.\n\n변경 대상:\n- DHCP: 이더넷 10.73.0.10 전용, Wi-Fi DHCP 제거\n- 예약 IP: 등록된 Pi 60대 적용\n- TFTP root: D:\\tftp\n- NFS export: D:\\rootfs -> /rpi\n- 서비스 재시작\n\n이 PC가 Raspberry Pi 부팅 서버이면 [예]를 누르세요.";
+                    return "부팅 서비스를 시작합니다.\n\n실행 내용:\n- DHCP/TFTP 서버 시작\n- rootfs 서비스 시작\n- DHCP/TFTP/NFS 방화벽 규칙 확인\n\nPi가 다음 DHCP에서 예약 IP를 받게 됩니다. 계속하려면 [예]를 누르세요.";
                 case "prepare-sd":
                     return "RPi4 EEPROM SD를 만듭니다.\n\n대상: S:\n실행 내용: Pi 4 Network Boot EEPROM 이미지 쓰기\n주의: S:의 모든 내용 삭제\n\n네트워크 부팅 대상은 RPi4만입니다. 계속하려면 [예]를 누르세요.";
                 case "zero2w-gadget-sd":
                     return "Zero 2 W USB gadget SD를 패치합니다.\n\n대상: S:\n변경 파일: config.txt, cmdline.txt, user-data, ssh marker\n주의: Zero 2 W는 SD로 부팅합니다. RPi4 네트워크 부팅 대상에 넣지 않습니다.\n\nS:가 Zero 2 W용 OS SD이면 [예]를 누르세요.";
-                case "firewall":
-                    return "부팅 포트 방화벽 규칙을 추가합니다.\n\n열 포트:\n- DHCP UDP 67\n- TFTP UDP 69\n- NFS TCP 2049\n- iSCSI TCP 3260\n\n이 PC가 격리된 10.73.0.0/24 부팅 서버이면 [예]를 누르세요.";
-                case "restore-network":
-                    return "유선 이더넷을 DHCP로 복구합니다.\n\n변경 대상: 이더넷 어댑터\n결과: 10.73.0.10 고정 IP가 제거되고 DHCP 주소를 다시 받습니다.\n\n테스트망을 종료할 때만 [예]를 누르세요.";
                 default:
                     return action.Title + " 작업을 실행합니다.\n\n" + action.Description + "\n\n계속할까요?";
             }
@@ -1145,7 +1085,7 @@ namespace RpiNetbootWindowsGui
             root.Controls.Add(title, 0, 0);
 
             var subtitle = new Label();
-            subtitle.Text = "기기 번호를 기준으로 bootfs, rootfs, hostname, 내부 설정 파일을 만듭니다. haneWIN은 운영 provider로 쓰지 않습니다.";
+            subtitle.Text = "기기 번호를 기준으로 bootfs, rootfs, hostname, 내부 설정 파일을 만듭니다.";
             subtitle.ForeColor = Color.FromArgb(82, 96, 88);
             subtitle.Font = new Font("Segoe UI", 10f);
             subtitle.Dock = DockStyle.Fill;

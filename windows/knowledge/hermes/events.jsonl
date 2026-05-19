@@ -12,3 +12,4 @@
 {"ts":"2026-05-19T15:23:45.0427711+09:00","type":"attempt.verdict","summary":"RPi4 d80c0b88 reached userspace; haneWIN is proof-only and not production.","attempt":"20260519-144335-d80c0b88-hanewin-systemd-explicit","provider":"haneWIN","verdict":"BOOT_REACHED_USERSPACE"}
 {"ts":"2026-05-19T15:23:45.2372489+09:00","type":"automation.added","summary":"Added clone-rpi4-client.ps1 for fast RPi4 register/clone from golden bootfs/rootfs.","verdict":"CLONE_WORKFLOW_READY"}
 {"ts":"2026-05-19T16:09:33.3844532+09:00","type":"automation.added","summary":"Added Device ID based RPi4 clone UI flow and rootfs client metadata seed.","verdict":"DEVICE_ID_CLONE_UI_READY"}
+{"ts":"2026-05-19T16:32:15.5667861+09:00","type":"ui.cleaned","summary":"Cleaned WinForms GUI to show only operational RPi netboot actions; removed diagnostic/provider experiment controls from executable.","verdict":"UI_OPERATIONAL_SURFACE_CLEANED"}
