@@ -194,4 +194,49 @@ Attempt:
 20260519-144335-d80c0b88-hanewin-systemd-explicit
 ```
 
+## 15:12 - RPi4 userspace boot success
+
+The user reported that the RPi4 boot succeeded after restoring the original systemd init.
+
+Attempt:
+
+```text
+20260519-144335-d80c0b88-hanewin-systemd-explicit
+```
+
+Corrected harness verdict:
+
+```text
+BOOT_REACHED_USERSPACE
+provider: haneWIN
+confidence: high
+evidence: D:\logs\netboot-harness\20260519-144335-d80c0b88-hanewin-systemd-explicit
+```
+
+Interpretation:
+
+- `D:\tftp\d80c0b88` and `D:\rootfs\d80c0b88` are now a known-good RPi4 bootfs/rootfs pair.
+- haneWIN is proof-only because the unregistered product expires after 30 days.
+- Production still requires a no-expiry provider: WinNFSd minimal retest first, Linux NFS appliance as the stable recommendation.
+
+## 15:15 - RPi4 clone workflow added
+
+Added:
+
+```text
+windows/tools/clone-rpi4-client.ps1
+windows/docs/rpi4-clone-runbook-ko.md
+windows/docs/decisions/ADR-0005-rpi4-clone-and-provider-policy.md
+windows/knowledge/obsidian-vault/RPi4-Netboot-Success.md
+windows/knowledge/obsidian-vault/Clone-Workflow.md
+```
+
+The clone script can:
+
+- plan the next clone,
+- register a new RPi4 client,
+- clone bootfs/rootfs from `d80c0b88`,
+- patch per-client identity,
+- verify the generated client.
+
 현재 사용자 RPi4 전원 재연결 대기 중입니다.

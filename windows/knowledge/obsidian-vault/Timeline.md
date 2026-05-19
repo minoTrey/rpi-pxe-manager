@@ -12,3 +12,5 @@
 - 14:19 - Started haneWIN official-minimal profile attempt `20260519-141926-d80c0b88-hanewin-busybox-static`; waiting for RPi4 power cycle.
 - 14:34 - haneWIN minimal reached NFS root and diagnostic BusyBox init; verdict `INIT_EXEC_REACHED_BUSYBOX_RC_MISSING`.
 - 14:43 - Restored original systemd init and started `20260519-144335-d80c0b88-hanewin-systemd-explicit`.
+- 15:12 - User reported successful RPi4 boot; harness records `BOOT_REACHED_USERSPACE`.
+- 15:15 - Added `clone-rpi4-client.ps1` so new RPi4 devices can be registered and cloned from the known-good `d80c0b88` bootfs/rootfs pair.

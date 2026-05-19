@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-05-19 13:55 KST
+Updated: 2026-05-19 15:15 KST
 
 ## Lab
 
@@ -15,32 +15,44 @@ Updated: 2026-05-19 13:55 KST
 ## Latest Verdict
 
 ```text
-NFS_MOUNT_INVALID_ARGUMENT
+BOOT_REACHED_USERSPACE
 provider: haneWIN
 confidence: high
+attempt: 20260519-144335-d80c0b88-hanewin-systemd-explicit
 ```
 
 ## Interpretation
 
-The Pi is not blocked at DHCP or TFTP. It reaches NFS mount negotiation. Windows NFS providers are now the main suspect.
+The first Raspberry Pi 4 reached userspace from the Windows-hosted bootfs/rootfs pair.
+This proves the lab network, EEPROM setting, TFTP prefix, bootfs, rootfs, and minimal NFS root command line are coherent.
+
+This does **not** approve haneWIN for production. haneWIN is a proof-only diagnostic provider because the unregistered product expires after 30 days.
 
 ## Next Move
 
-Use Linux `nfs-kernel-server` on a bridged Linux VM/helper at `10.73.0.20`, while keeping Windows DHCP/TFTP.
+1. Preserve `d80c0b88` as the current known-good/golden RPi4.
+2. Use `windows/tools/clone-rpi4-client.ps1` to register and clone new RPi4 bootfs/rootfs pairs.
+3. Retest the same known-good bootfs/rootfs under a no-expiry provider:
+   - first quick candidate: WinNFSd with the minimal `vers=3` profile,
+   - stable production candidate: Linux NFS appliance/helper with ext4 + `nfs-kernel-server`.
 
 ## Process State
 
-haneWIN portable NFS was stopped at 2026-05-19 14:10 KST. DHCP/TFTP remain active; Windows NFS ports are intentionally free for the next provider decision.
+haneWIN portable NFS is currently proof-only. Do not stop the active NFS provider while the Pi is running from the NFS root.
+Stop or switch providers only after the Pi is powered off or migrated.
 
-At 2026-05-19 14:19 KST, haneWIN was started again for one final official-minimal profile attempt:
-
-```text
-20260519-141926-d80c0b88-hanewin-busybox-static
-nfsroot=10.73.0.10:/rpi/d80c0b88,vers=3
-```
-
-That attempt reached the diagnostic BusyBox init. The original systemd init has been restored. Active attempt:
+Successful attempt:
 
 ```text
 20260519-144335-d80c0b88-hanewin-systemd-explicit
+cmdline: nfsroot=10.73.0.10:/rpi/d80c0b88,vers=3 init=/usr/sbin/init
+verdict: BOOT_REACHED_USERSPACE
+evidence: D:\logs\netboot-harness\20260519-144335-d80c0b88-hanewin-systemd-explicit
+```
+
+Current clone source:
+
+```text
+bootfs: D:\tftp\d80c0b88
+rootfs: D:\rootfs\d80c0b88
 ```

@@ -351,15 +351,16 @@ function Classify-Evidence {
     $initramfsPass = $BootText -match "(?im)TFTP\s+GET\s+$escapedPiIp`:\d+\s+$escapedSerial/initramfs8\b" -and $BootText -match "(?im)TFTP\s+DONE\s+$escapedPiIp`:\d+\s+$escapedSerial/initramfs8\b"
     $consoleNfsMountPass = $ConsoleText -match "(?i)(NFS root mounted|Mounting root file system\s+.*done|VFS:\s+Mounted root|root filesystem\s+.*done)"
     $consoleBusyboxRcMissing = $ConsoleText -match "(?i)(can't run\s+'/etc/init\.d/rcS'|cannot run\s+'/etc/init\.d/rcS'|Please press Enter to activate this console)"
-    $consoleInitReached = $consoleBusyboxRcMissing -or ($ConsoleText -match "(?i)(Starting systemd-udevd|Run\s+/init\s+as init process|Run\s+/usr/sbin/init\s+as init process)")
-    $nfsMountPass = $consoleNfsMountPass -or
+    $consoleBootSuccess = $ConsoleText -match "(?i)(user reported successful systemd boot|boot reached userspace|boot success|login:|raspberrypi login|Welcome to Raspberry Pi|Reached target|multi-user\.target|graphical\.target|Started .*Login Service)"
+    $consoleInitReached = $consoleBootSuccess -or $consoleBusyboxRcMissing -or ($ConsoleText -match "(?i)(Starting systemd-udevd|Run\s+/init\s+as init process|Run\s+/usr/sbin/init\s+as init process)")
+    $nfsMountPass = $consoleBootSuccess -or $consoleNfsMountPass -or
         $NfsText -match "(?im)\bMOUNT\b.*\b(MNT|from|$escapedPiIp)\b" -or
         $NfsText -match "(?im)\bmount3\b.*\b$escapedPiIp\b" -or
         $NfsText -match "(?im)mountd:\s+name\s+rpi/$escapedSerial\s+-->" -or
         $NfsText -match "(?im)\b$escapedPiIp\b.*\b(mount|mnt|nfs)\b" -or
         $NfsText -match "(?im)\bFinal local requested path\b.*$escapedSerial"
     $nfsMountInvalidArgument = $ConsoleText -match "(?i)(nfs\s+mount.*invalid argument|mount:\s+invalid argument)"
-    $nfsRootReadPass = $consoleBusyboxRcMissing -or
+    $nfsRootReadPass = $consoleBootSuccess -or $consoleBusyboxRcMissing -or
         $NfsText -match "\\usr\\sbin\\init" -or
         $NfsText -match "/usr/sbin/init" -or
         $NfsText -match "\\sbin\\init" -or
@@ -382,6 +383,7 @@ function Classify-Evidence {
     if ($nfsMountPass) { $passed += "NFS_MOUNT" }
     if ($nfsRootReadPass) { $passed += "NFS_ROOT_READ" }
     if ($initRead) { $passed += "INIT_READ" }
+    if ($consoleBootSuccess) { $passed += "USERSPACE_REACHED" }
 
     $category = "UNKNOWN"
     $likelyArea = "needs more evidence"
@@ -419,6 +421,10 @@ function Classify-Evidence {
     } elseif ($busyboxActive -and $consoleBusyboxRcMissing) {
         $category = "INIT_EXEC_REACHED_BUSYBOX_RC_MISSING"
         $likelyArea = "diagnostic busybox init reached; restore systemd init and retest"
+        $confidence = "high"
+    } elseif ($consoleBootSuccess) {
+        $category = "BOOT_REACHED_USERSPACE"
+        $likelyArea = "RPi4 reached userspace; current bootfs/rootfs is a golden clone candidate"
         $confidence = "high"
     } elseif ($error14 -or $noInit -or ($initRead -and $repeatDhcpAfterNfs)) {
         $category = "INIT_EXEC_FAIL_PROBABLE"
@@ -459,6 +465,7 @@ function Classify-Evidence {
             consoleNoWorkingInit = $noInit
             consoleNfsMountInvalidArgument = $nfsMountInvalidArgument
             consoleBusyboxRcMissing = $consoleBusyboxRcMissing
+            consoleBootSuccess = $consoleBootSuccess
             busyboxDiagnosticActive = $busyboxActive
             repeatDhcpAfterNfs = $repeatDhcpAfterNfs
         }
@@ -539,6 +546,7 @@ function Get-NextThought {
         "NFS_MOUNT_FAIL" { return "TFTP passed. Check nfsroot path, NFS export alias, portmap/NFS listener, and firewall first." }
         "NFS_MOUNT_INVALID_ARGUMENT" { return "The Pi reached NFS mount negotiation, but the provider/options combination was rejected. Move the same bootfs/rootfs to Linux nfs-kernel-server for the next A/B test." }
         "INIT_EXEC_REACHED_BUSYBOX_RC_MISSING" { return "The diagnostic busybox init executed successfully. Restore the original systemd init and retest the same haneWIN minimal provider profile." }
+        "BOOT_REACHED_USERSPACE" { return "Promote this bootfs/rootfs pair as the current golden source, then clone/register new RPi4 devices from it. haneWIN remains proof-only; validate a no-expiry NFS provider before production." }
         "TFTP_BOOTFILE_FAIL" { return "DHCP passed. Check TFTP prefix, boot file set, and timeout patterns first." }
         "DHCP_FAIL" { return "The Pi did not find the server. Check link, VLAN/AP isolation, DHCP listener, and MAC reservation first." }
         default { return "Add console evidence and classify the same attempt again with finish-attempt." }
