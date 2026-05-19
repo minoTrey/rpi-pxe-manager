@@ -68,8 +68,8 @@ def nfs_cmdline(config: HostConfig, client_index: int) -> str:
     return (
         "console=serial0,115200 console=tty1 "
         "root=/dev/nfs "
-        f"nfsroot={config.server_ip}:{config.nfs_alias}/{client.serial},vers=3,tcp "
-        "rw ip=dhcp rootwait elevator=deadline"
+        f"nfsroot={config.server_ip}:{config.nfs_alias}/{client.serial},vers=3 "
+        "rw ip=dhcp rootwait elevator=deadline init=/usr/sbin/init"
     )
 
 

@@ -257,7 +257,7 @@ function Get-Option43PsText {
 
 function Get-NfsCmdline {
     param([object] $ConfigObject, [object] $Client)
-    return "console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=$($ConfigObject.server_ip):$($ConfigObject.nfs_alias)/$($Client.serial),vers=3,tcp rw ip=dhcp rootwait elevator=deadline"
+    return "console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=$($ConfigObject.server_ip):$($ConfigObject.nfs_alias)/$($Client.serial),vers=3 rw ip=dhcp rootwait elevator=deadline init=/usr/sbin/init"
 }
 
 function Get-IscsiCmdline {
