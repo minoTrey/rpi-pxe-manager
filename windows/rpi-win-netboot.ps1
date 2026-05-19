@@ -4,8 +4,8 @@ param(
     [string] $Command,
 
     [string] $Config = "rpi-netboot.json",
-    [ValidateSet("hanewin-nfs", "windows-server-nfs", "windows-server-iscsi")]
-    [string] $Method = "hanewin-nfs",
+    [ValidateSet("windows-lite-nfs", "hanewin-nfs", "windows-server-nfs", "windows-server-iscsi")]
+    [string] $Method = "windows-lite-nfs",
     [string] $ServerIp = "192.168.1.10",
     [string] $RouterIp = "192.168.1.1",
     [string] $DnsServer = "",

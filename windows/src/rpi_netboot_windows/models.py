@@ -8,6 +8,7 @@ import re
 
 
 SUPPORTED_METHODS = (
+    "windows-lite-nfs",
     "hanewin-nfs",
     "windows-server-nfs",
     "windows-server-iscsi",
@@ -66,7 +67,7 @@ class Client:
 @dataclass(slots=True)
 class HostConfig:
     name: str = "rpi-netboot-windows"
-    method: str = "hanewin-nfs"
+    method: str = "windows-lite-nfs"
     server_ip: str = "192.168.1.10"
     router_ip: str = "192.168.1.1"
     dns_server: str = "192.168.1.1"

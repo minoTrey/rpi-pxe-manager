@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     init = sub.add_parser("init", help="Create a starter JSON configuration.")
     init.add_argument("--config", default="rpi-netboot.json", help="Config path to create.")
-    init.add_argument("--method", choices=SUPPORTED_METHODS, default="hanewin-nfs")
+    init.add_argument("--method", choices=SUPPORTED_METHODS, default="windows-lite-nfs")
     init.add_argument("--server-ip", default="192.168.1.10")
     init.add_argument("--router-ip", default="192.168.1.1")
     init.add_argument("--dns-server", default="")
@@ -47,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     imp = sub.add_parser("import-legacy", help="Import clients_backup.json from the Linux project.")
     imp.add_argument("--backup", required=True)
     imp.add_argument("--config", default="rpi-netboot.json")
-    imp.add_argument("--method", choices=SUPPORTED_METHODS, default="hanewin-nfs")
+    imp.add_argument("--method", choices=SUPPORTED_METHODS, default="windows-lite-nfs")
     imp.add_argument("--server-ip", default="192.168.1.10")
     imp.add_argument("--router-ip", default="192.168.1.1")
     imp.add_argument("--dns-server", default="")

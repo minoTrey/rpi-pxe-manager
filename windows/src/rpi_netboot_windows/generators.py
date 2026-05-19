@@ -88,6 +88,7 @@ def iscsi_cmdline(config: HostConfig, client_index: int) -> str:
 
 def render_readme(config: HostConfig) -> str:
     method_note = {
+        "windows-lite-nfs": "Windows desktop lab path using built-in DHCP/TFTP and an NFS rootfs service",
         "hanewin-nfs": "haneWIN DHCP/NFS + Tftpd64 또는 haneWIN TFTP를 쓰는 Windows Desktop 친화 경로",
         "windows-server-nfs": "Windows Server DHCP + Server for NFS + 별도 TFTP 경로",
         "windows-server-iscsi": "Windows Server DHCP + TFTP + iSCSI Target 경로",
@@ -109,14 +110,14 @@ def render_readme(config: HostConfig) -> str:
            - `{config.project_root}`
            - `{config.tftp_root}`
            - `{config.nfs_root}`
-           - `{config.iscsi_root}`
+           - `{config.iscsi_root}` only if using iSCSI
         2. Copy Raspberry Pi boot partition files into each `tftp/<prefix>` folder.
            The generated `cmdline.txt` and `config.txt` files are already placed there.
         3. Configure DHCP/TFTP:
            - Windows Server users: review `windows/02-dhcp-windows-server.ps1`.
-           - Desktop/lab users: review `windows/hanewin-dhcp-profile.md`.
+           - Desktop/lab users: start the boot service from the Windows GUI.
         4. Configure the root filesystem backend:
-           - NFS: review `windows/hanewin-nfs-exports.txt` or `windows/server-nfs.ps1`.
+           - NFS: use the operational rootfs service, or review `windows/server-nfs.ps1` for Windows Server.
            - iSCSI: review `windows/03-iscsi-windows-server.ps1`.
         5. Open firewall ports with `windows/01-firewall.ps1`.
         6. Materialize the Linux root filesystem from a Pi/Linux helper using

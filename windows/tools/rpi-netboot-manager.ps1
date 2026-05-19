@@ -167,8 +167,8 @@ function Show-Status {
     Write-Output "2. 서버 PC 이더넷 IP와 공유기 연결"
     Write-Output "3. lab 설정 파일과 TFTP/rootfs 폴더"
     Write-Output "4. DHCP/TFTP/NFS 서비스 포트"
-    Write-Output "5. 무료 Lite provider 실행 상태"
-    Write-Output "6. haneWIN provider 설정 상태"
+    Write-Output "5. 부팅 서비스 실행 상태"
+    Write-Output "6. 저장소 정리 후보"
     Write-Output "7. 지금 다음에 눌러야 할 버튼"
 
     Invoke-Step "1. 저장소 / SD카드" {
@@ -238,9 +238,9 @@ function Show-Status {
             return
         }
 
-        Write-Check "정상" "lab 설정" "등록된 Pi 클라이언트 $(@($cfg.clients).Count)대, 서버 IP $($cfg.server_ip), 공유기 $($cfg.router_ip)"
+        Write-Check "정상" "lab 설정" "등록된 RPi4 $(@($cfg.clients).Count)대, 서버 IP $($cfg.server_ip), 공유기 $($cfg.router_ip), 방식 $($cfg.method)"
 
-        foreach ($folder in @($cfg.tftp_root, $cfg.nfs_root, $cfg.iscsi_root, "D:\downloads")) {
+        foreach ($folder in @($cfg.tftp_root, $cfg.nfs_root, "D:\downloads", "D:\logs", "D:\tools")) {
             if (Test-Folder $folder) {
                 Write-Check "정상" $folder "폴더 있음"
             } else {
@@ -251,15 +251,16 @@ function Show-Status {
         $tftpDirs = Get-FolderCount $cfg.tftp_root
         $rootfsDirs = Get-FolderCount $cfg.nfs_root
         Write-Check "정상" "TFTP 클라이언트 폴더" "${tftpDirs}개. 각 Pi serial별 폴더입니다."
-        Write-Check "주의" "rootfs 클라이언트 폴더" "${rootfsDirs}개. 폴더는 있지만 실제 Linux rootfs 파일은 아직 별도 복제가 필요합니다."
+        Write-Check "정상" "rootfs 클라이언트 폴더" "${rootfsDirs}개. 실제 등록된 RPi4와 맞는지 아래 정리 후보를 확인합니다."
 
         $bootFiles = 0
         if (Test-Folder $cfg.tftp_root) {
-            $bootFiles = @(Get-ChildItem -LiteralPath $cfg.tftp_root -Recurse -File -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -match "^(start4\.elf|fixup4\.dat|kernel.*\.img|.*\.dtb)$" }).Count
+            $bootFileMatches = @(Get-ChildItem -LiteralPath $cfg.tftp_root -Recurse -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match "^(start4\.elf|fixup4\.dat|kernel.*\.img|.*\.dtb)$" })
+            $bootFiles = $bootFileMatches.Count
         }
         if ($bootFiles -gt 0) {
-            Write-Check "정상" "TFTP 실제 부팅 파일" "$bootFiles개 발견"
+            Write-Check "정상" "TFTP 실제 부팅 파일" "$($bootFiles)개 발견"
         } else {
             Write-Check "필요" "TFTP 실제 부팅 파일" "현재 cmdline/config 중심입니다. 첫 Pi의 boot partition 파일을 D:\tftp\<serial>에 채워야 합니다."
         }
@@ -296,16 +297,9 @@ function Show-Status {
         } else {
             Write-Check "필요" "NFS TCP 2049" "아직 대기 중인 서비스가 없습니다. rootfs 부팅에는 NFS 설정이 필요합니다."
         }
-        $iscsiListeners = @(Get-TcpListeners 3260)
-        if ($iscsiListeners.Count -gt 0) {
-            $addresses = @($iscsiListeners | ForEach-Object { $_.LocalAddress }) -join ", "
-            Write-Check "정상" "iSCSI TCP 3260" "서비스가 대기 중입니다. 주소: $addresses"
-        } else {
-            Write-Check "주의" "iSCSI TCP 3260" "현재 NFS 방식이면 필수는 아닙니다."
-        }
     }
 
-    Invoke-Step "5. 무료 Lite provider 상태" {
+    Invoke-Step "5. 부팅 서비스 상태" {
         $litePidPath = "D:\tools\rpi-netboot\run\rpi-boot-lite.pid"
         $nfsPidPath = "D:\tools\rpi-netboot\run\winnfsd.pid"
         $liteExe = "D:\tools\rpi-netboot\bin\RpiBootServiceLite.exe"
@@ -314,18 +308,18 @@ function Show-Status {
         if (Test-Path -LiteralPath $liteExe) {
             Write-Check "정상" "내장 DHCP/TFTP 파일" $liteExe
         } else {
-            Write-Check "필요" "내장 DHCP/TFTP 파일" "아직 준비되지 않았습니다. '무료 부팅 서비스 시작'을 누르면 자동 빌드됩니다."
+            Write-Check "필요" "내장 DHCP/TFTP 파일" "아직 준비되지 않았습니다. '부팅 서비스 시작'을 누르면 자동 빌드됩니다."
         }
 
         if (Test-Path -LiteralPath $nfsExe) {
-            Write-Check "정상" "WinNFSd 파일" $nfsExe
+            Write-Check "정상" "rootfs 서비스 파일" $nfsExe
         } else {
-            Write-Check "필요" "WinNFSd 파일" "아직 준비되지 않았습니다. '무료 부팅 서비스 시작'을 누르면 다운로드합니다."
+            Write-Check "필요" "rootfs 서비스 파일" "아직 준비되지 않았습니다. '부팅 서비스 시작'을 누르면 준비합니다."
         }
 
         foreach ($entry in @(
             @{ Name = "내장 DHCP/TFTP"; Path = $litePidPath },
-            @{ Name = "WinNFSd"; Path = $nfsPidPath }
+            @{ Name = "rootfs 서비스"; Path = $nfsPidPath }
         )) {
             if (Test-Path -LiteralPath $entry.Path) {
                 $pidText = (Get-Content -LiteralPath $entry.Path -Raw -ErrorAction SilentlyContinue).Trim()
@@ -333,57 +327,40 @@ function Show-Status {
                 if ($proc) {
                     Write-Check "정상" $entry.Name "실행 중 PID $pidText"
                 } else {
-                    Write-Check "주의" $entry.Name "PID 파일은 있지만 프로세스가 없습니다. '무료 부팅 서비스 시작'을 다시 누르세요."
+                    Write-Check "주의" $entry.Name "PID 파일은 있지만 프로세스가 없습니다. '부팅 서비스 시작'을 다시 누르세요."
                 }
             } else {
-                Write-Check "필요" $entry.Name "실행 중이 아닙니다. haneWIN 대신 쓰려면 '무료 부팅 서비스 시작'을 누르세요."
+                Write-Check "필요" $entry.Name "실행 중이 아닙니다. '부팅 서비스 시작'을 누르세요."
             }
         }
     }
 
-    Invoke-Step "6. haneWIN provider 설정" {
-        $dhcpIni = "C:\Program Files\dhcp\DHCPsrv.ini"
-        if (Test-Path -LiteralPath $dhcpIni) {
-            $dhcpText = Get-Content -LiteralPath $dhcpIni -Raw -ErrorAction SilentlyContinue
-            if ($dhcpText -match [regex]::Escape("172.30.1.5")) {
-                Write-Check "주의" "DHCP 설정" "Wi-Fi 주소 172.30.1.5 프로필이 남아 있습니다. haneWIN을 계속 쓰려면 'haneWIN 설정 적용'을 누르세요."
-            } elseif ($dhcpText -match [regex]::Escape($serverAddressExpected)) {
-                Write-Check "정상" "DHCP 설정" "이더넷 $serverAddressExpected 중심 설정입니다."
-            } else {
-                Write-Check "주의" "DHCP 설정" "서버 IP $serverAddressExpected 설정을 확인해야 합니다."
-            }
-            if ($dhcpText -match "DefaultOptions=43 32") {
-                Write-Check "정상" "DHCP Option 43" "Raspberry Pi Boot vendor option 설정이 들어 있습니다."
-            } else {
-                Write-Check "필요" "DHCP Option 43" "haneWIN으로 Pi가 TFTP 요청을 시작하려면 Raspberry Pi Boot vendor option이 필요합니다. 무료 provider를 쓰려면 '무료 부팅 서비스 시작'을 누르세요."
-            }
+    Invoke-Step "6. 저장소 정리 후보" {
+        if (-not $cfg) {
+            Write-Check "주의" "정리 후보" "lab 설정이 없어 D:\ 정리 후보를 판단하지 않았습니다."
         } else {
-            Write-Check "주의" "haneWIN DHCP 설정" "haneWIN 설정 파일이 없습니다. haneWIN은 빠른 검증용 30일 평가판 provider입니다."
-        }
-
-        $tftpRoot = $null
-        try {
-            $tftpReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\haneWIN\TFTPsrv" -ErrorAction Stop
-            $tftpRoot = [string]$tftpReg.RootDirectory
-        } catch {
-            $tftpRoot = $null
-        }
-        if ($cfg -and $tftpRoot -eq [string]$cfg.tftp_root) {
-            Write-Check "정상" "TFTP root" "$tftpRoot"
-        } elseif ($cfg) {
-            Write-Check "필요" "TFTP root" "현재 '$tftpRoot'. haneWIN 기대값은 '$($cfg.tftp_root)'입니다. haneWIN을 계속 쓰려면 'haneWIN 설정 적용'을 누르세요."
-        }
-
-        $exports = "C:\Program Files\nfsd\exports"
-        if (Test-Path -LiteralPath $exports) {
-            $exportsText = Get-Content -LiteralPath $exports -Raw -ErrorAction SilentlyContinue
-            if ($cfg -and $exportsText -match [regex]::Escape([string]$cfg.nfs_root) -and $exportsText -match "-name:rpi") {
-                Write-Check "정상" "NFS export" "$($cfg.nfs_root) -> /rpi"
-            } else {
-                Write-Check "필요" "NFS export" "아직 D:\rootfs -> /rpi 설정이 아닙니다. haneWIN을 계속 쓰려면 'haneWIN 설정 적용'을 누르세요."
+            $registered = @{}
+            foreach ($client in @($cfg.clients)) {
+                if ($client.serial) { $registered[[string]$client.serial] = $true }
             }
-        } else {
-            Write-Check "주의" "haneWIN NFS export" "haneWIN NFS exports 파일이 없습니다. haneWIN 대신 무료 Lite provider를 사용할 수 있습니다."
+            foreach ($root in @([string]$cfg.tftp_root, [string]$cfg.nfs_root)) {
+                if (Test-Folder $root) {
+                    $stale = @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+                        Where-Object { -not $registered.ContainsKey($_.Name) })
+                    if ($stale.Count -gt 0) {
+                        $sample = @($stale | Select-Object -First 5 -ExpandProperty Name) -join ", "
+                        Write-Check "주의" "$root 정리 후보" "$($stale.Count)개가 현재 등록 목록에 없습니다. 예: $sample"
+                    } else {
+                        Write-Check "정상" "$root 정리 후보" "등록되지 않은 클라이언트 폴더 없음"
+                    }
+                }
+            }
+
+            foreach ($folder in @("D:\backups", "D:\iscsi", "D:\templates\golden")) {
+                if (Test-Folder $folder -and (Get-FileCount $folder) -eq 0 -and (Get-FolderCount $folder) -eq 0) {
+                    Write-Check "주의" $folder "현재 비어 있습니다. 운영에 필요해질 때 다시 만들 수 있습니다."
+                }
+            }
         }
     }
 
@@ -392,13 +369,11 @@ function Show-Status {
             Write-Check "주의" "관리자 권한" "설치/SD 쓰기/방화벽 작업을 누르면 관리자 모드로 다시 열어야 합니다."
         }
         Write-Output "권장 순서:"
-        Write-Output "1. 무료 부팅 서비스 시작 버튼으로 내장 DHCP/TFTP + WinNFSd provider 실행"
-        Write-Output "2. haneWIN 평가판을 쓰는 경우에만 haneWIN 설치/설정 버튼 사용"
-        Write-Output "3. SD카드에 EEPROM 쓰기 버튼으로 Pi 4 network boot EEPROM 준비"
-        Write-Output "4. 첫 Pi의 Raspberry Pi OS boot 파티션을 꽂고 '첫 Pi 부팅파일 복사' 실행"
-        Write-Output "5. 'RPi4 netboot rootfs 준비'로 Linux helper 스크립트 생성 후 D:\rootfs\<serial>에 복제"
-        Write-Output "6. Zero 2 W가 필요하면 별도 SD카드에 'Zero 2 W SD boot + USB gadget 준비' 실행"
-        Write-Output "7. 전체 상태 다시 확인 후 Pi 4 한 대만 네트워크 부팅 테스트"
+        Write-Output "1. 상태 확인으로 D:\ 저장소와 네트워크를 확인"
+        Write-Output "2. 서버 PC 준비로 이더넷과 기본 폴더를 맞춤"
+        Write-Output "3. 부팅 서비스 시작"
+        Write-Output "4. 새 RPi4 등록/복제로 기기 번호, 시리얼, MAC 입력"
+        Write-Output "5. 새 RPi4 전원을 다시 넣어 네트워크 부팅 확인"
     }
 }
 
@@ -411,26 +386,26 @@ function Invoke-ServerSetup {
         Invoke-Tool "tools\set-ethernet-10.73.ps1"
     }
     Invoke-Step "Create D: storage folders" {
-        foreach ($path in @("D:\tftp", "D:\rootfs", "D:\iscsi", "D:\downloads", "D:\templates", "D:\templates\golden", "D:\backups", "D:\logs", "D:\tools")) {
+        foreach ($path in @("D:\tftp", "D:\rootfs", "D:\downloads", "D:\logs", "D:\tools")) {
             New-Item -ItemType Directory -Force -Path $path | Out-Null
         }
         Get-ChildItem -Force D:\ | Select-Object Name,Mode,LastWriteTime | Format-Table -AutoSize
     }
-    Invoke-Step "Regenerate lab config and plan" {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\rpi-win-netboot.ps1" import-legacy `
-            -Backup $LegacyBackup `
-            -Config $Config `
-            -ServerIp 10.73.0.10 `
-            -RouterIp 10.73.0.1 `
-            -ProjectRoot "D:\" `
-            -TftpRoot "D:\tftp" `
-            -RootfsRoot "D:\rootfs" `
-            -IscsiRoot "D:\iscsi"
-        if ($LASTEXITCODE -ne 0) { throw "import-legacy failed" }
+    Invoke-Step "Validate lab config and plan" {
+        if (-not (Test-Path -LiteralPath $Config)) {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\rpi-win-netboot.ps1" init `
+                -Config $Config `
+                -Method windows-lite-nfs `
+                -ServerIp 10.73.0.10 `
+                -RouterIp 10.73.0.1 `
+                -ProjectRoot "D:\" `
+                -TftpRoot "D:\tftp" `
+                -RootfsRoot "D:\rootfs"
+            if ($LASTEXITCODE -ne 0) { throw "init failed" }
+        }
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\rpi-win-netboot.ps1" generate -Config $Config -Out $Generated
         if ($LASTEXITCODE -ne 0) { throw "generate failed" }
     }
-    Invoke-SyncTftp
     Invoke-Firewall
     Invoke-Verify
 }
@@ -463,13 +438,13 @@ function Invoke-InstallServices {
 }
 
 function Invoke-LiteProviderStart {
-    Invoke-Step "무료 Lite provider 준비/시작" {
+    Invoke-Step "부팅 서비스 준비/시작" {
         Invoke-Tool "tools\lite-provider.ps1" @("start", "-Config", $Config)
     }
 }
 
 function Invoke-LiteProviderStop {
-    Invoke-Step "무료 Lite provider 중지" {
+    Invoke-Step "부팅 서비스 중지" {
         Invoke-Tool "tools\lite-provider.ps1" @("stop", "-Config", $Config)
     }
 }

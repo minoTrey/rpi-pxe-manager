@@ -56,7 +56,9 @@ $folders = @(
     $ProjectRoot,
     (Join-Path $ProjectRoot "tftp"),
     (Join-Path $ProjectRoot "rootfs"),
-    (Join-Path $ProjectRoot "iscsi")
+    (Join-Path $ProjectRoot "downloads"),
+    (Join-Path $ProjectRoot "logs"),
+    (Join-Path $ProjectRoot "tools")
 )
 foreach ($folder in $folders) {
     [pscustomobject]@{ Path = $folder; Exists = (Test-Path -LiteralPath $folder) }
@@ -68,8 +70,8 @@ Get-NetUDPEndpoint -LocalPort 67,69 -ErrorAction SilentlyContinue |
     Select-Object LocalAddress,LocalPort,OwningProcess,@{Name='ProcessName';Expression={(Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName}} |
     Format-Table -AutoSize
 
-Write-Host "TCP 2049 appears after NFS is running; TCP 3260 appears after iSCSI target is running."
-Get-NetTCPConnection -LocalPort 2049,3260 -ErrorAction SilentlyContinue |
+Write-Host "TCP 2049 appears after the rootfs service is running."
+Get-NetTCPConnection -LocalPort 2049 -ErrorAction SilentlyContinue |
     Select-Object LocalAddress,LocalPort,State,OwningProcess,@{Name='ProcessName';Expression={(Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName}} |
     Format-Table -AutoSize
 
