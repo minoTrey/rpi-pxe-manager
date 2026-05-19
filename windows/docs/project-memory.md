@@ -6,7 +6,7 @@
 
 ## 현재 한 줄 상태
 
-RPi4는 DHCP/TFTP, 공식 bootfs 수신, NFS root mount까지 성공했습니다. `D:\rootfs\d80c0b88`에는 부팅 핵심 rootfs가 준비됐지만, 현재는 `/usr/sbin/init` 실행 단계에서 `error -14`가 재현됩니다. 지금은 static busybox init 진단 모드가 적용되어 있고 Pi 재부팅 결과를 기다립니다.
+RPi4는 DHCP/TFTP, 공식 bootfs 수신, NFS root mount까지 성공했습니다. `D:\rootfs\d80c0b88`에는 부팅 핵심 rootfs가 준비됐지만, 현재는 NFS root 위 init 실행 단계에서 멈춥니다. 2026-05-19 기준 static busybox init 진단 상태에서도 하네스가 `INIT_EXEC_FAIL_PROBABLE`로 판정했습니다.
 
 ## 반드시 기억할 결정
 
@@ -60,6 +60,7 @@ RPi4는 DHCP/TFTP, 공식 bootfs 수신, NFS root mount까지 성공했습니다
 | 30 | 2026-05-15 | RPi4 rootfs 핵심 파일 준비 | `D:\rootfs\d80c0b88`에 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`, `usr\lib\modules` 확인 | SD 없이 재부팅 테스트 대기 |
 | 31 | 2026-05-15 | 공식 Raspberry Pi OS bootfs로 재시험 | `D:\tftp\d80c0b88` 동기화 후 Pi가 `kernel8.img` 9,695,883 bytes와 `initramfs8` 16,040,912 bytes 수신 | `error -14` 재현, boot/root OS 세트 불일치 단독 원인 가능성 낮아짐 |
 | 32 | 2026-05-15 | static busybox init 진단 적용 | `windows\tools\init-diagnostic.ps1` 추가, 원래 systemd init 백업 후 Debian arm64 static busybox를 임시 init으로 설치 | Pi 재부팅 결과 대기 |
+| 33 | 2026-05-19 | netboot 테스트 하네스 도입 | `windows\tools\netboot-harness.ps1` 추가, 최신 로그를 증거 묶음으로 수집하고 자동 분류 | 최신 판정 `INIT_EXEC_FAIL_PROBABLE`, 다음은 Linux NFS provider A/B |
 
 ## 현재 확정된 장비 값
 
@@ -89,6 +90,7 @@ RPi4는 DHCP/TFTP, 공식 bootfs 수신, NFS root mount까지 성공했습니다
 - 공식 Raspberry Pi OS bootfs를 TFTP로 제공했고 Pi가 새 `kernel8.img`와 `initramfs8`를 수신했습니다.
 - SD 없는 부팅에서 NFS root mount는 성공했습니다.
 - static busybox init 진단이 적용됐고 원래 systemd init은 `D:\rootfs\d80c0b88\usr\sbin\init.systemd-before-busybox`에 백업됐습니다.
+- netboot 하네스가 `D:\logs\netboot-harness`에 evidence와 verdict를 저장합니다.
 
 ## 현재 막힌 것
 
@@ -104,8 +106,8 @@ WinNFSd는 대량 쓰기 중 `Input/output error`, `Stale file handle`가 나올
 2. `전체 상태 다시 확인`으로 DHCP/TFTP/NFS 리스너와 rootfs 상태를 확인합니다.
 3. rootfs 준비 기능을 GUI에 연결합니다. 현재 후보 스크립트는 `tools\rootfs-helper.ps1`입니다.
 4. `D:\rootfs\d80c0b88`에 `bin\sh`, `sbin\init`, `usr\lib\systemd\systemd`가 있는지 확인합니다.
-5. Linux NFS server 또는 static busybox init으로 `error -14` 원인을 분리합니다.
-6. busybox도 `error -14`면 WinNFSd provider를 운영 후보에서 낮추고 bridged Linux VM/WSL/서버 provider를 GUI에 분리합니다.
+5. 같은 bootfs/rootfs로 NFS provider만 bridged Linux VM의 `nfs-kernel-server`로 바꿔 A/B 테스트합니다.
+6. Linux NFS에서 성공하면 WinNFSd provider를 운영 후보에서 낮추고 bridged Linux VM/WSL/서버 provider를 GUI에 분리합니다.
 7. 성공하면 첫 RPi4를 기준 이미지로 삼아 다음 RPi4들을 복제/등록하는 GUI 흐름을 만듭니다.
 8. Zero 2 W용 SD + USB gadget 준비 기능은 별도 버튼으로 분리합니다. 네트워크 부팅 흐름에 섞지 않습니다.
 9. GitHub `minoTrey/rpi-pxe-manager`의 Windows branch에 변경을 commit/push하고, Linear 이슈에 진행 상황을 남깁니다.
