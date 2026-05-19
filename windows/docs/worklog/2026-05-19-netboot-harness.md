@@ -133,3 +133,25 @@ confidence: high
 haneWIN은 WinNFSd와 다른 지점에서 실패했지만, 둘 다 장기 provider로 채택하기 어렵습니다. 다음 테스트는 Linux `nfs-kernel-server` provider A/B입니다.
 
 사용자의 물리 작업은 RPi4 전원 뺐다 꽂기까지만 유지합니다. 나머지 작업은 자동화 스크립트와 하네스가 기록해야 합니다.
+
+## 14:19 - haneWIN official-minimal profile 시작
+
+haneWIN 공식 Windows netboot 예시는 `nfsroot=... ,vers=3`에 가까운 최소 옵션을 사용합니다. Linux helper를 준비하기 전, 옵션 과잉으로 인한 실패 가능성을 분리하기 위해 최소 profile을 한 번 더 시작했습니다.
+
+Attempt:
+
+```text
+20260519-141926-d80c0b88-hanewin-busybox-static
+```
+
+cmdline:
+
+```text
+console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=10.73.0.10:/rpi/d80c0b88,vers=3 rw ip=dhcp rootwait elevator=deadline init=/usr/sbin/init
+```
+
+현재 상태:
+
+- haneWIN portable NFS PID `13856`
+- DHCP/TFTP는 `RpiBootServiceLite`
+- 사용자 RPi4 전원 재연결 대기

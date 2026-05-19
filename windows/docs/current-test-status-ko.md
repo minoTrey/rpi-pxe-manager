@@ -80,3 +80,14 @@ D:\tools\rpi-netboot\linux-nfs-provider
 2026-05-19 14:10 KST 기준 haneWIN portable NFS는 중지했습니다. 현재 Windows 서버 PC에서는 DHCP/TFTP만 `RpiBootServiceLite`로 열려 있고, NFS 111/2049는 비워 둔 상태입니다.
 
 Linux NFS helper가 준비되기 전에는 RPi4 전원을 다시 넣어도 부팅이 완료되지 않습니다. 다음 전원 재연결은 Linux provider attempt를 시작한 뒤에 진행합니다.
+
+## 진행 중인 추가 확인
+
+2026-05-19 14:19 KST에 haneWIN 공식 가이드에 가까운 최소 profile을 한 번 더 시작했습니다.
+
+```text
+attempt: 20260519-141926-d80c0b88-hanewin-busybox-static
+cmdline: nfsroot=10.73.0.10:/rpi/d80c0b88,vers=3
+```
+
+이 시도는 `udp`, `nolock`, `rsize`, `wsize`, `nfsrootdebug`를 제거해 haneWIN 공식 예시에 더 가깝게 맞춘 것입니다. 사용자가 RPi4 전원을 뺐다 꽂으면 하네스가 이 attempt의 로그를 비교합니다.

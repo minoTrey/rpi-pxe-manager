@@ -62,6 +62,8 @@ confidence: high
 
 Note: haneWIN portable NFS was stopped at 2026-05-19 14:10 KST. DHCP/TFTP remain active through `RpiBootServiceLite`; NFS 111/2049 is intentionally free until the Linux NFS helper is ready.
 
+Update: at 2026-05-19 14:19 KST, haneWIN was started again for one last official-minimal profile test before Linux helper setup. Attempt `20260519-141926-d80c0b88-hanewin-busybox-static` uses `nfsroot=10.73.0.10:/rpi/d80c0b88,vers=3` only. Waiting for user to unplug/replug RPi4 power.
+
 ## Tracking Structure
 
 - Current Korean status: `windows/docs/current-test-status-ko.md`

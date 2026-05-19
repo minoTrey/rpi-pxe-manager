@@ -31,3 +31,10 @@ Use Linux `nfs-kernel-server` on a bridged Linux VM/helper at `10.73.0.20`, whil
 ## Process State
 
 haneWIN portable NFS was stopped at 2026-05-19 14:10 KST. DHCP/TFTP remain active; Windows NFS ports are intentionally free for the next provider decision.
+
+At 2026-05-19 14:19 KST, haneWIN was started again for one final official-minimal profile attempt:
+
+```text
+20260519-141926-d80c0b88-hanewin-busybox-static
+nfsroot=10.73.0.10:/rpi/d80c0b88,vers=3
+```

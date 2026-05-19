@@ -9,3 +9,4 @@
 - 13:20 - haneWIN UDP first profile failed because Pi rejected `proto=udp`.
 - 13:40 - haneWIN UDP corrected profile reached mountd path mapping, then Pi failed with `nfs mount mount: invalid argument`.
 - 13:55 - Harness verdict updated to `NFS_MOUNT_INVALID_ARGUMENT`.
+- 14:19 - Started haneWIN official-minimal profile attempt `20260519-141926-d80c0b88-hanewin-busybox-static`; waiting for RPi4 power cycle.
