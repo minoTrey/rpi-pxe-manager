@@ -11,6 +11,11 @@
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+$OriginalLocation = (Get-Location).Path
+if (-not [IO.Path]::IsPathRooted($Config)) {
+    $Config = [IO.Path]::GetFullPath((Join-Path $OriginalLocation $Config))
+}
+
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 

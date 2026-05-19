@@ -113,3 +113,11 @@ static busybox init 상태에서도 실패가 반복되므로 다음 고가치 �
 4. Pi `cmdline.txt`의 `nfsroot=<server-ip>:/srv/rpi-root,vers=3,proto=tcp,rw`만 VM IP와 export 경로로 바꿉니다.
 5. Linux NFS에서 부팅되면 WinNFSd/NTFS provider 계층이 원인입니다.
 6. Linux NFS에서도 실패하면 rootfs 복제 품질, 파일 내용, 커널/initramfs 설정을 다시 봅니다.
+
+Windows 쪽 provider 전환 준비는 다음 스크립트가 담당합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\linux-nfs-provider.ps1 prepare -Config .\windows\lab-10.73.json -Serial d80c0b88 -LinuxServerIp 10.73.0.20
+```
+
+상세 절차는 `docs\linux-nfs-provider.md`를 기준으로 합니다.

@@ -77,3 +77,28 @@ missingEvidence: Pi HDMI/serial console text
 3. rootfs를 Linux ext4 위 `/srv/rpi-root/d80c0b88`에 복제하거나, 우선 최소 복사본으로 테스트합니다.
 4. `cmdline.txt`의 `nfsroot`만 VM IP/export path로 바꿉니다.
 5. 하네스 `start-attempt`/`finish-attempt`로 provider `LinuxNFS` 결과를 저장합니다.
+
+## 10:50 Linux NFS provider 전환 자동화 추가
+
+현재 PC에는 VirtualBox, Docker, Hyper-V 관리 명령이 없고, WSL도 현대적인 배포판 실행 상태가 아닙니다. 따라서 Windows PC 안에서 바로 Linux NFS server를 띄우기보다, bridged Linux VM 또는 별도 Linux helper를 NFS provider로 쓰는 구조가 현실적입니다.
+
+추가한 자동화:
+
+- `windows\tools\linux-nfs-provider.ps1`
+- `windows\RPI-Netboot-LinuxNFS-Prepare.bat`
+- `windows\RPI-Netboot-LinuxNFS-Start-Attempt.bat`
+- `windows\docs\linux-nfs-provider.md`
+
+`prepare` 명령은 안전하게 Linux VM용 bundle만 만듭니다. 이 단계에서는 아직 `D:\tftp\d80c0b88\cmdline.txt`를 바꾸지 않습니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\linux-nfs-provider.ps1 prepare -Config .\windows\lab-10.73.json -Serial d80c0b88 -LinuxServerIp 10.73.0.20
+```
+
+bundle 생성 위치:
+
+```text
+D:\tools\rpi-netboot\linux-nfs-provider
+```
+
+Linux VM export가 준비된 뒤에는 `start-attempt`가 `cmdline.txt`를 Linux NFS provider로 바꾸고 하네스 attempt를 시작합니다.

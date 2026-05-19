@@ -61,6 +61,7 @@ RPi4는 DHCP/TFTP, 공식 bootfs 수신, NFS root mount까지 성공했습니다
 | 31 | 2026-05-15 | 공식 Raspberry Pi OS bootfs로 재시험 | `D:\tftp\d80c0b88` 동기화 후 Pi가 `kernel8.img` 9,695,883 bytes와 `initramfs8` 16,040,912 bytes 수신 | `error -14` 재현, boot/root OS 세트 불일치 단독 원인 가능성 낮아짐 |
 | 32 | 2026-05-15 | static busybox init 진단 적용 | `windows\tools\init-diagnostic.ps1` 추가, 원래 systemd init 백업 후 Debian arm64 static busybox를 임시 init으로 설치 | Pi 재부팅 결과 대기 |
 | 33 | 2026-05-19 | netboot 테스트 하네스 도입 | `windows\tools\netboot-harness.ps1` 추가, 최신 로그를 증거 묶음으로 수집하고 자동 분류 | 최신 판정 `INIT_EXEC_FAIL_PROBABLE`, 다음은 Linux NFS provider A/B |
+| 34 | 2026-05-19 | Linux NFS provider 전환 자동화 추가 | `windows\tools\linux-nfs-provider.ps1`와 Linux VM용 bundle 생성 | WinNFSd/NTFS 의심을 실제 provider A/B 테스트로 검증할 준비 |
 
 ## 현재 확정된 장비 값
 
