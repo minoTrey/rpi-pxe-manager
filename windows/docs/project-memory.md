@@ -88,6 +88,7 @@ Meaning:
 - Moved all remaining `D:\downloads` contents into `windows\cache\downloads`; `D:\downloads` is now empty.
 - Changed the GUI default SD flow from EEPROM SD writing to Raspberry Pi OS SD writing.
 - Pinned the OS SD image to `2026-04-21-raspios-trixie-arm64-lite.img` (Raspberry Pi OS Lite 64-bit Trixie).
+- Scoped `저장소 설정` and `저장소 열기` to `서버 PC 준비` only; other task screens now show only their primary task action.
 
 ## OS SD Checkpoint
 

@@ -53,6 +53,7 @@ Interpretation:
 - `D:\downloads` was emptied into `windows\cache\downloads`.
 - GUI default SD flow now writes Raspberry Pi OS, not EEPROM.
 - The pinned image is `2026-04-21-raspios-trixie-arm64-lite.img`.
+- `저장소 설정` and `저장소 열기` now appear only on `서버 PC 준비`, not on every task screen.
 
 Default GUI SD image:
 

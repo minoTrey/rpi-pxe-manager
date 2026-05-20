@@ -113,6 +113,7 @@ namespace RpiNetbootWindowsGui
         private Label storageMetricValue;
         private Button primaryButton;
         private Button secondaryButton;
+        private Button storageOpenButton;
         private ToolTip tips;
         private Process runningProcess;
         private bool isRunning;
@@ -417,14 +418,14 @@ namespace RpiNetbootWindowsGui
             secondaryButton.Click += delegate { ChooseStorageRoot(); };
             actionRow.Controls.Add(secondaryButton);
 
-            var utility = CreateMainButton("저장소 열기", buttonSoft, ink);
-            utility.Width = 118;
-            utility.Margin = new Padding(0, 0, 8, 8);
-            utility.FlatAppearance.BorderColor = cardBorder;
-            utility.AccessibleName = "현재 저장소 열기";
-            tips.SetToolTip(utility, "현재 설정된 TFTP, rootfs, downloads 저장소를 엽니다.");
-            utility.Click += delegate { OpenPath(GetConfiguredStorageRoot()); };
-            actionRow.Controls.Add(utility);
+            storageOpenButton = CreateMainButton("저장소 열기", buttonSoft, ink);
+            storageOpenButton.Width = 118;
+            storageOpenButton.Margin = new Padding(0, 0, 8, 8);
+            storageOpenButton.FlatAppearance.BorderColor = cardBorder;
+            storageOpenButton.AccessibleName = "현재 저장소 열기";
+            tips.SetToolTip(storageOpenButton, "현재 설정된 TFTP, rootfs, downloads 저장소를 엽니다.");
+            storageOpenButton.Click += delegate { OpenPath(GetConfiguredStorageRoot()); };
+            actionRow.Controls.Add(storageOpenButton);
 
             var help = new SoftPanel();
             help.Dock = DockStyle.Fill;
@@ -588,6 +589,7 @@ namespace RpiNetbootWindowsGui
             primaryButton.FlatAppearance.MouseOverBackColor = primaryButton.BackColor;
             primaryButton.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(primaryButton.BackColor, 0.05f);
             primaryButton.AccessibleDescription = action.Description;
+            UpdateStorageActionVisibility(action.Task);
 
             foreach (Control c in navList.Controls)
             {
@@ -605,6 +607,19 @@ namespace RpiNetbootWindowsGui
             }
             helpTitle.Text = action.Title + " 안내";
             SetMultilineText(helpBody, GetHelpText(action.Task));
+        }
+
+        private void UpdateStorageActionVisibility(string task)
+        {
+            bool show = string.Equals(task, "server-setup", StringComparison.OrdinalIgnoreCase);
+            if (secondaryButton != null)
+            {
+                secondaryButton.Visible = show;
+            }
+            if (storageOpenButton != null)
+            {
+                storageOpenButton.Visible = show;
+            }
         }
 
         private void FocusSelectedNav()
@@ -953,6 +968,7 @@ namespace RpiNetbootWindowsGui
             isRunning = busy;
             primaryButton.Enabled = !busy;
             secondaryButton.Enabled = !busy;
+            if (storageOpenButton != null) storageOpenButton.Enabled = !busy;
             foreach (Control c in navList.Controls) c.Enabled = !busy;
             statusLabel.Text = status;
             statusLabel.BackColor = busy ? Color.FromArgb(255, 246, 220) : tealSoft;

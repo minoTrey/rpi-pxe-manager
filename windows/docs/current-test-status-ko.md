@@ -52,6 +52,7 @@ C:\Users\test\Documents\workspace\rpi-pxe-manager\windows\RPI-Netboot-Manager.ex
 - `D:\downloads`의 모든 항목을 `windows\cache\downloads`로 옮겼고, `D:\downloads`는 비어 있다.
 - GUI 기본 SD 작업을 `RPi4 EEPROM SD`에서 `RPi4 OS SD 작성`으로 바꿨다.
 - 기본 OS 이미지는 `2026-04-21-raspios-trixie-arm64-lite.img`이다.
+- `저장소 설정`과 `저장소 열기` 버튼은 이제 `서버 PC 준비` 화면에서만 보인다.
 
 ## OS SD 상태
 

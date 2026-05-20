@@ -31,3 +31,4 @@
 - 16:30 - Added and verified GUI physical-disk selection for `RPi4 EEPROM SD`; the flow no longer assumes `S:`.
 - 16:32 - Wrote the Pi 4 Network Boot EEPROM image to Disk 3. Post-write state is MBR with one 256 MiB FAT32 XINT13 partition, not boot/system.
 - 17:14 - Moved all remaining `D:\downloads` contents into `windows\cache\downloads`, rebuilt the GUI so the default SD flow is `RPi4 OS SD 작성`, and pinned it to Raspberry Pi OS Lite 64-bit Trixie `2026-04-21-raspios-trixie-arm64-lite.img`.
+- 17:30 - Scoped `저장소 설정` and `저장소 열기` to the `서버 PC 준비` screen only, removing repeated storage controls from task-specific screens.
