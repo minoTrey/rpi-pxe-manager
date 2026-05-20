@@ -7,6 +7,7 @@
     [string] $Generated = ".\generated\lab-10.73",
     [string] $StorageRoot = "",
     [string] $SdDriveLetter = "S",
+    [int] $SdDiskNumber = -1,
     [ValidateSet("pi4")]
     [string] $Model = "pi4",
     [switch] $Yes
@@ -484,15 +485,22 @@ function Invoke-PrepareRpi4EepromSd {
     Assert-Admin
     $cfg = if (Test-Path -LiteralPath $Config) { Read-ConfigObject } else { $null }
     $cache = Get-ProjectDownloadCache
+    $targetText = if ($SdDiskNumber -ge 0) { "PhysicalDrive$SdDiskNumber" } else { "drive $SdDriveLetter`:" }
     Invoke-Step "List disks before writing SD" {
         Invoke-Tool "tools\rpi-sd-card.ps1" @("list", "-CacheDir", $cache)
     }
-    if (-not (Confirm-Destructive "This will erase the SD card at drive $SdDriveLetter`: and write the Raspberry Pi 4 network-boot EEPROM image. Zero 2 W is not a netboot target.")) {
+    if (-not (Confirm-Destructive "This will erase the selected SD target $targetText and write the Raspberry Pi 4 network-boot EEPROM image. Zero 2 W is not a netboot target.")) {
         Write-Host "Cancelled."
         return
     }
     Invoke-Step "Write Raspberry Pi 4 EEPROM network boot image to SD" {
-        Invoke-Tool "tools\rpi-sd-card.ps1" @("prepare-eeprom-network", "-Model", "pi4", "-DriveLetter", $SdDriveLetter, "-CacheDir", $cache, "-IUnderstand")
+        $args = @("prepare-eeprom-network", "-Model", "pi4", "-CacheDir", $cache, "-IUnderstand")
+        if ($SdDiskNumber -ge 0) {
+            $args += @("-DiskNumber", ([string]$SdDiskNumber))
+        } else {
+            $args += @("-DriveLetter", $SdDriveLetter)
+        }
+        Invoke-Tool "tools\rpi-sd-card.ps1" $args
     }
 }
 

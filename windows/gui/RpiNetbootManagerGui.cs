@@ -118,6 +118,7 @@ namespace RpiNetbootWindowsGui
         private bool isRunning;
         private string selectedTask = "status";
         private CloneRpi4Request pendingCloneRequest;
+        private EepromSdRequest pendingEepromSdRequest;
         private readonly bool autoRunInitialTask;
 
         private static readonly string UiFont = UiFonts.Family;
@@ -177,7 +178,7 @@ namespace RpiNetbootWindowsGui
             actions.Add(new ActionDefinition("server-setup", "서버 PC 준비", "선택한 저장소와 이더넷 10.73.0.10 구성을 자동으로 맞춥니다.", IconKind.Server, true));
             actions.Add(new ActionDefinition("lite-provider-start", "부팅 서비스 시작", "DHCP, TFTP, NFS 서비스를 시작해 RPi4 네트워크 부팅을 받을 준비를 합니다.", IconKind.Network, true));
             actions.Add(new ActionDefinition("clone-rpi4", "새 RPi4 등록/복제", "기기 번호, 시리얼, MAC을 입력해 새 RPi4의 bootfs/rootfs와 내부 설정을 만듭니다.", IconKind.Package, false));
-            actions.Add(new ActionDefinition("prepare-sd", "RPi4 EEPROM SD", "S: SD카드에 RPi4 Network Boot EEPROM 이미지를 씁니다.", IconKind.SdCard, true, true));
+            actions.Add(new ActionDefinition("prepare-sd", "RPi4 EEPROM SD", "선택한 SD 디스크에 RPi4 Network Boot EEPROM 이미지를 씁니다.", IconKind.SdCard, true, true));
             actions.Add(new ActionDefinition("zero2w-gadget-sd", "Zero 2 W Gadget SD", "S: SD를 Zero 2 W USB Ethernet gadget 부팅용으로 패치합니다.", IconKind.SdCard, false, true));
             actions.Add(new ActionDefinition("docs", "도움말", "운영 절차와 복제 Runbook을 엽니다.", IconKind.Doc, false));
         }
@@ -669,6 +670,11 @@ namespace RpiNetbootWindowsGui
 
         private string GetHelpText(string task)
         {
+            if (task == "prepare-sd")
+            {
+                return "RPi4 전용입니다. 버튼을 누르면 현재 연결된 디스크 목록을 보여주고, 사용자가 선택한 디스크에만 EEPROM 이미지를 씁니다.\n\nboot/system 디스크, 미디어 없음, USB가 아닌 디스크, 64GB 초과 디스크는 선택할 수 없습니다.\n\n다음: RPi4를 이 SD카드로 한 번 부팅해 EEPROM을 업데이트합니다.";
+            }
+
             switch (task)
             {
                 case "status":
@@ -742,6 +748,15 @@ namespace RpiNetbootWindowsGui
                 return;
             }
 
+            if (action.Task == "prepare-sd")
+            {
+                using (var dialog = new EepromSdDialog())
+                {
+                    if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                    pendingEepromSdRequest = dialog.Request;
+                }
+            }
+
             if (RequiresConfirmation(action))
             {
                 DialogResult result = MessageBox.Show(
@@ -758,6 +773,10 @@ namespace RpiNetbootWindowsGui
             if (action.Task == "clone-rpi4")
             {
                 pendingCloneRequest = null;
+            }
+            if (action.Task == "prepare-sd")
+            {
+                pendingEepromSdRequest = null;
             }
         }
 
@@ -781,6 +800,11 @@ namespace RpiNetbootWindowsGui
             string toolPath;
             switch (action.Task)
             {
+                case "prepare-sd":
+                    if (pendingEepromSdRequest == null) throw new InvalidOperationException("EEPROM SD target disk is missing.");
+                    return commandPrefix + "& " + PsSingle(scriptPath) +
+                        " -Task prepare-sd -SdDiskNumber " + pendingEepromSdRequest.DiskNumber.ToString() +
+                        " -Yes 3>&1 4>&1 5>&1 6>&1";
                 case "zero2w-gadget-sd":
                     toolPath = Path.Combine(projectRoot, "tools", "zero2w-gadget-sd.ps1");
                     return commandPrefix + "& " + PsSingle(toolPath) + " apply -DriveLetter S -Yes 3>&1 4>&1 5>&1 6>&1";
@@ -820,6 +844,14 @@ namespace RpiNetbootWindowsGui
 
         private string GetConfirmationText(ActionDefinition action)
         {
+            if (action.Task == "prepare-sd" && pendingEepromSdRequest != null)
+            {
+                return "RPi4 EEPROM SD를 만듭니다.\n\n대상: " + pendingEepromSdRequest.Summary +
+                       "\n실행 내용: Pi 4 Network Boot EEPROM 이미지 쓰기" +
+                       "\n주의: 선택한 디스크 전체 내용 삭제" +
+                       "\n\n네트워크 부팅 대상은 RPi4만입니다. 계속하려면 [예]를 누르세요.";
+            }
+
             switch (action.Task)
             {
                 case "server-setup":
@@ -1205,6 +1237,421 @@ namespace RpiNetbootWindowsGui
         public string Serial;
         public string Mac;
         public string Ip;
+    }
+
+    internal sealed class EepromSdRequest
+    {
+        public int DiskNumber;
+        public string Summary;
+    }
+
+    internal sealed class SdDiskRow
+    {
+        private const UInt64 MaxSafeBytes = 64UL * 1024UL * 1024UL * 1024UL;
+
+        public int DiskNumber { get; set; }
+        public string FriendlyName { get; set; }
+        public string BusType { get; set; }
+        public string MediaType { get; set; }
+        public string PartitionStyle { get; set; }
+        public UInt64 SizeBytes { get; set; }
+        public bool IsBoot { get; set; }
+        public bool IsSystem { get; set; }
+        public string Volumes { get; set; }
+
+        public string Disk
+        {
+            get { return "PhysicalDrive" + DiskNumber.ToString(); }
+        }
+
+        public string Size
+        {
+            get { return FormatBytes(SizeBytes); }
+        }
+
+        public bool IsSafe
+        {
+            get
+            {
+                return !IsBoot &&
+                       !IsSystem &&
+                       SizeBytes > 0 &&
+                       SizeBytes <= MaxSafeBytes &&
+                       string.Equals(BusType, "USB", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        public string Safety
+        {
+            get
+            {
+                if (IsBoot || IsSystem) return "차단: Windows boot/system";
+                if (SizeBytes == 0) return "차단: 미디어 없음";
+                if (!string.Equals(BusType, "USB", StringComparison.OrdinalIgnoreCase)) return "차단: USB 아님";
+                if (SizeBytes > MaxSafeBytes) return "차단: 64GB 초과";
+                return "선택 가능";
+            }
+        }
+
+        public string Summary
+        {
+            get
+            {
+                string volumes = string.IsNullOrWhiteSpace(Volumes) ? "볼륨 없음" : Volumes;
+                return Disk + " / " + FriendlyName + " / " + BusType + " / " + Size + " / " + volumes;
+            }
+        }
+
+        private static string FormatBytes(UInt64 value)
+        {
+            const double KB = 1024.0;
+            const double MB = KB * 1024.0;
+            const double GB = MB * 1024.0;
+            const double TB = GB * 1024.0;
+            if (value >= (UInt64)TB) return (value / TB).ToString("0.00") + " TB";
+            if (value >= (UInt64)GB) return (value / GB).ToString("0.00") + " GB";
+            if (value >= (UInt64)MB) return (value / MB).ToString("0.00") + " MB";
+            if (value >= (UInt64)KB) return (value / KB).ToString("0.00") + " KB";
+            return value.ToString() + " B";
+        }
+    }
+
+    internal sealed class EepromSdDialog : Form
+    {
+        private static readonly string UiFont = UiFonts.Family;
+        private readonly DataGridView grid;
+        private readonly Label messageLabel;
+        private readonly Button okButton;
+        private List<SdDiskRow> rows = new List<SdDiskRow>();
+
+        public EepromSdRequest Request { get; private set; }
+
+        public EepromSdDialog()
+        {
+            Text = "EEPROM SD 대상 디스크 선택";
+            StartPosition = FormStartPosition.CenterParent;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            ClientSize = new Size(860, 520);
+            BackColor = Color.FromArgb(245, 247, 248);
+            Font = new Font(UiFont, 9.0f);
+
+            var root = new TableLayoutPanel();
+            root.Dock = DockStyle.Fill;
+            root.Padding = new Padding(22);
+            root.ColumnCount = 1;
+            root.RowCount = 4;
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+            Controls.Add(root);
+
+            var header = new Panel();
+            header.Dock = DockStyle.Fill;
+            root.Controls.Add(header, 0, 0);
+
+            var title = new Label();
+            title.Text = "RPi4 EEPROM 이미지를 쓸 디스크 선택";
+            title.ForeColor = Color.FromArgb(26, 33, 30);
+            title.Font = new Font(UiFont, 15.5f, FontStyle.Bold);
+            title.Dock = DockStyle.Top;
+            title.Height = 32;
+            header.Controls.Add(title);
+
+            var subtitle = new Label();
+            subtitle.Text = "선택한 전체 디스크가 지워집니다. 드라이브 문자보다 PhysicalDrive 번호를 기준으로 확인하세요.";
+            subtitle.ForeColor = Color.FromArgb(82, 96, 88);
+            subtitle.Font = new Font(UiFont, 8.8f);
+            subtitle.Dock = DockStyle.Bottom;
+            subtitle.Height = 34;
+            header.Controls.Add(subtitle);
+
+            grid = new DataGridView();
+            grid.Dock = DockStyle.Fill;
+            grid.ReadOnly = true;
+            grid.AllowUserToAddRows = false;
+            grid.AllowUserToDeleteRows = false;
+            grid.AllowUserToResizeRows = false;
+            grid.RowHeadersVisible = false;
+            grid.MultiSelect = false;
+            grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            grid.AutoGenerateColumns = false;
+            grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            grid.BackgroundColor = Color.White;
+            grid.BorderStyle = BorderStyle.FixedSingle;
+            grid.SelectionChanged += delegate { UpdateSelectionMessage(); };
+            AddColumn("Disk", "디스크", 88);
+            AddColumn("FriendlyName", "이름", 190);
+            AddColumn("BusType", "버스", 70);
+            AddColumn("Size", "크기", 82);
+            AddColumn("PartitionStyle", "파티션", 78);
+            AddColumn("Volumes", "볼륨", 210);
+            AddColumn("Safety", "상태", 130);
+            root.Controls.Add(grid, 0, 1);
+
+            messageLabel = new Label();
+            messageLabel.Dock = DockStyle.Fill;
+            messageLabel.TextAlign = ContentAlignment.MiddleLeft;
+            messageLabel.Padding = new Padding(10, 0, 10, 0);
+            messageLabel.ForeColor = Color.FromArgb(180, 35, 24);
+            messageLabel.BackColor = Color.FromArgb(255, 244, 232);
+            root.Controls.Add(messageLabel, 0, 2);
+
+            var buttons = new FlowLayoutPanel();
+            buttons.Dock = DockStyle.Fill;
+            buttons.FlowDirection = FlowDirection.RightToLeft;
+            buttons.WrapContents = false;
+            root.Controls.Add(buttons, 0, 3);
+
+            okButton = CreateDialogButton("선택한 디스크에 쓰기", Color.FromArgb(168, 88, 20), Color.White, 162);
+            okButton.Click += delegate { Submit(); };
+            buttons.Controls.Add(okButton);
+            AcceptButton = okButton;
+
+            var cancel = CreateDialogButton("취소", Color.FromArgb(237, 241, 236), Color.FromArgb(26, 33, 30), 100);
+            cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
+            buttons.Controls.Add(cancel);
+            CancelButton = cancel;
+
+            var refresh = CreateDialogButton("새로고침", Color.FromArgb(237, 241, 236), Color.FromArgb(26, 33, 30), 110);
+            refresh.Click += delegate { ReloadRows(); };
+            buttons.Controls.Add(refresh);
+
+            ReloadRows();
+        }
+
+        private void AddColumn(string property, string header, int fillWeight)
+        {
+            var column = new DataGridViewTextBoxColumn();
+            column.DataPropertyName = property;
+            column.HeaderText = header;
+            column.FillWeight = fillWeight;
+            column.SortMode = DataGridViewColumnSortMode.NotSortable;
+            grid.Columns.Add(column);
+        }
+
+        private Button CreateDialogButton(string text, Color fill, Color textColor, int width)
+        {
+            var button = new Button();
+            button.Text = text;
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 0;
+            button.BackColor = fill;
+            button.ForeColor = textColor;
+            button.Font = new Font(UiFont, 9.0f, FontStyle.Bold);
+            button.Size = new Size(width, 42);
+            button.Margin = new Padding(8, 6, 0, 6);
+            button.Cursor = Cursors.Hand;
+            return button;
+        }
+
+        private void ReloadRows()
+        {
+            try
+            {
+                rows = LoadDiskRows();
+                grid.DataSource = null;
+                grid.DataSource = rows;
+                StyleRows();
+                SelectDefaultRow();
+                UpdateSelectionMessage();
+            }
+            catch (Exception ex)
+            {
+                rows = new List<SdDiskRow>();
+                grid.DataSource = null;
+                messageLabel.Text = "디스크 목록을 읽지 못했습니다: " + ex.Message;
+                okButton.Enabled = false;
+            }
+        }
+
+        private void StyleRows()
+        {
+            foreach (DataGridViewRow row in grid.Rows)
+            {
+                var disk = row.DataBoundItem as SdDiskRow;
+                if (disk == null) continue;
+                if (!disk.IsSafe)
+                {
+                    row.DefaultCellStyle.ForeColor = Color.FromArgb(120, 124, 130);
+                    row.DefaultCellStyle.BackColor = Color.FromArgb(248, 248, 248);
+                }
+            }
+        }
+
+        private void SelectDefaultRow()
+        {
+            if (grid.Rows.Count == 0) return;
+            grid.ClearSelection();
+            int index = 0;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (rows[i].IsSafe)
+                {
+                    index = i;
+                    break;
+                }
+            }
+            grid.Rows[index].Selected = true;
+            grid.CurrentCell = grid.Rows[index].Cells[0];
+        }
+
+        private void UpdateSelectionMessage()
+        {
+            var selected = GetSelectedRow();
+            if (selected == null)
+            {
+                messageLabel.Text = "대상 디스크를 선택하세요.";
+                okButton.Enabled = false;
+                return;
+            }
+
+            okButton.Enabled = selected.IsSafe;
+            if (selected.IsSafe)
+            {
+                messageLabel.ForeColor = Color.FromArgb(116, 58, 0);
+                messageLabel.Text = "선택됨: " + selected.Summary + "  -  이 디스크 전체가 지워집니다.";
+            }
+            else
+            {
+                messageLabel.ForeColor = Color.FromArgb(180, 35, 24);
+                messageLabel.Text = selected.Summary + "  -  " + selected.Safety;
+            }
+        }
+
+        private SdDiskRow GetSelectedRow()
+        {
+            if (grid.CurrentRow != null)
+            {
+                return grid.CurrentRow.DataBoundItem as SdDiskRow;
+            }
+            if (grid.SelectedRows.Count > 0)
+            {
+                return grid.SelectedRows[0].DataBoundItem as SdDiskRow;
+            }
+            return null;
+        }
+
+        private void Submit()
+        {
+            var selected = GetSelectedRow();
+            if (selected == null || !selected.IsSafe)
+            {
+                UpdateSelectionMessage();
+                return;
+            }
+            Request = new EepromSdRequest
+            {
+                DiskNumber = selected.DiskNumber,
+                Summary = selected.Summary
+            };
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+
+        private static List<SdDiskRow> LoadDiskRows()
+        {
+            string script = @"
+$enc = New-Object System.Text.UTF8Encoding -ArgumentList $false
+[Console]::OutputEncoding = $enc
+$OutputEncoding = $enc
+$ErrorActionPreference = 'Stop'
+$volumesByDisk = @{}
+foreach ($partition in Get-Partition -ErrorAction SilentlyContinue) {
+    if ($partition.DriveLetter) {
+        $key = [string]$partition.DiskNumber
+        if (-not $volumesByDisk.ContainsKey($key)) { $volumesByDisk[$key] = @() }
+        $volume = Get-Volume -DriveLetter $partition.DriveLetter -ErrorAction SilentlyContinue
+        $label = if ($volume) { [string]$volume.FileSystemLabel } else { '' }
+        $fs = if ($volume) { [string]$volume.FileSystem } else { '' }
+        $volumesByDisk[$key] += (('{0}:{1}:{2}' -f $partition.DriveLetter, $label, $fs).TrimEnd(':'))
+    }
+}
+Get-Disk | Sort-Object Number | ForEach-Object {
+    $key = [string]$_.Number
+    $volumes = if ($volumesByDisk.ContainsKey($key)) { $volumesByDisk[$key] -join ', ' } else { '' }
+    $fields = @(
+        [string]$_.Number,
+        [string]$_.FriendlyName,
+        [string]$_.BusType,
+        [string]$_.MediaType,
+        [string]$_.PartitionStyle,
+        [string][UInt64]$_.Size,
+        [string]$_.IsBoot,
+        [string]$_.IsSystem,
+        [string]$volumes
+    )
+    (($fields | ForEach-Object { ([string]$_).Replace(""`t"", "" "").Replace(""`r"", "" "").Replace(""`n"", "" "") }) -join ""`t"")
+}
+";
+
+            var psi = new ProcessStartInfo();
+            psi.FileName = "powershell.exe";
+            psi.Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " +
+                            Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+            psi.UseShellExecute = false;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+            psi.CreateNoWindow = true;
+            psi.StandardOutputEncoding = Encoding.UTF8;
+            psi.StandardErrorEncoding = Encoding.UTF8;
+
+            using (var process = Process.Start(psi))
+            {
+                if (!process.WaitForExit(12000))
+                {
+                    try { process.Kill(); } catch { }
+                    throw new InvalidOperationException("Get-Disk timed out.");
+                }
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+                if (process.ExitCode != 0)
+                {
+                    throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? "Get-Disk failed." : error.Trim());
+                }
+                return ParseDiskRows(output);
+            }
+        }
+
+        private static List<SdDiskRow> ParseDiskRows(string output)
+        {
+            var result = new List<SdDiskRow>();
+            string[] lines = (output ?? "").Replace("\r\n", "\n").Split(new char[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string raw in lines)
+            {
+                string line = raw.TrimEnd('\r');
+                if (line.Trim().Length == 0) continue;
+                string[] parts = line.Split(new char[] { '\t' });
+                if (parts.Length < 9) continue;
+
+                int number;
+                UInt64 size;
+                if (!Int32.TryParse(parts[0], out number)) continue;
+                if (!UInt64.TryParse(parts[5], out size)) size = 0;
+
+                result.Add(new SdDiskRow
+                {
+                    DiskNumber = number,
+                    FriendlyName = parts[1],
+                    BusType = parts[2],
+                    MediaType = parts[3],
+                    PartitionStyle = parts[4],
+                    SizeBytes = size,
+                    IsBoot = ParseBool(parts[6]),
+                    IsSystem = ParseBool(parts[7]),
+                    Volumes = parts[8]
+                });
+            }
+            return result;
+        }
+
+        private static bool ParseBool(string value)
+        {
+            return string.Equals(value, "True", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     internal sealed class CloneRpi4Dialog : Form

@@ -26,3 +26,7 @@
 - 14:05 - Verified Pi 4 Network Boot EEPROM image download and moved the EEPROM cache into `windows\cache\downloads`.
 - 14:12 - Confirmed current `S:` is `Disk 3`, USB, 29.72 GB, `bootfs` FAT32. It is safe from boot/system disk checks but will be erased if EEPROM write is run.
 - 14:20 - Documented clone order: EEPROM SD is a one-time bootloader update; new RPi4 still needs serial/MAC confirmation before `새 RPi4 등록/복제`.
+- 16:03 - Restarted active boot services on `RpiBootServiceLite` plus project-local `WinNFSd`; DHCP/TFTP/NFS ports are owned by the production candidate path.
+- 16:24 - Removed haneWIN services and install folders from the PC while preserving proof logs.
+- 16:30 - Added and verified GUI physical-disk selection for `RPi4 EEPROM SD`; the flow no longer assumes `S:`.
+- 16:32 - Wrote the Pi 4 Network Boot EEPROM image to Disk 3. Post-write state is MBR with one 256 MiB FAT32 XINT13 partition, not boot/system.

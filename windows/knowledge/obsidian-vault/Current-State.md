@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-05-20 14:25 KST
+Updated: 2026-05-20 16:35 KST
 
 ## Active Workspace
 
@@ -80,18 +80,41 @@ Image hash:
 SHA256 43639F3D17C53D47C1E54D6B6C9229BB095014A15A93BD948717B45343EA22F7
 ```
 
-Current SD observation before writing:
+Current SD observation after writing:
 
 ```text
 Disk 3
 Generic STORAGE DEVICE
 USB
 29.72 GB
-S: bootfs FAT32, about 504 MB
+MBR
+Partition 1: FAT32 XINT13, 256 MiB
 not boot/system
 ```
 
-Important: `S:` currently looks like a Raspberry Pi OS bootfs card, not an empty EEPROM card. Running `RPi4 EEPROM SD` will erase the whole 29.72 GB card.
+Status: EEPROM SD write completed from the GUI after the disk-selection flow was added. The GUI now requires choosing a physical disk and no longer assumes `S:`.
+
+Evidence:
+
+- `powershell -File tools\rpi-sd-card.ps1 list`
+- `Get-Disk -Number 3`
+- `Get-Partition -DiskNumber 3`
+
+## Provider Cleanup
+
+haneWIN is no longer installed on this PC.
+
+- Removed services: `DHCPservice`, `TFTPService`, `NFSserver`, `PMAPDaemon`
+- Removed folders: `C:\Program Files\dhcp`, `C:\Program Files\tftp`, `C:\Program Files\nfsd`, `D:\tools\rpi-netboot\hanewin-portable`
+- Cleanup log: `D:\logs\hanewin-cleanup-20260520-1625.log`
+- Preserved proof logs: `D:\logs\hanewin-portable.stdout.log`, `D:\logs\hanewin-portable.stderr.log`, and netboot harness evidence
+
+Current boot services:
+
+```text
+RpiBootServiceLite PID 6696: DHCP/TFTP
+WinNFSd PID 11120: NFS 111/2049 on 10.73.0.10
+```
 
 ## Clone Flow
 
@@ -119,8 +142,8 @@ Potential next UX improvement:
 
 ## Next Move
 
-1. Decide whether the current `S:` 29.72 GB bootfs SD may be erased for EEPROM writing.
-2. If yes, run the GUI `RPi4 EEPROM SD` flow and verify byte-for-byte write.
+1. Boot the target RPi4 once from the completed EEPROM SD.
+2. Power off the target RPi4 and remove the SD.
 3. Confirm target RPi4 serial/MAC.
 4. Register and clone a new RPi4 from golden `d80c0b88`.
-5. Restart boot services and test SD-less network boot.
+5. Restart boot services if reservations changed and test SD-less network boot.

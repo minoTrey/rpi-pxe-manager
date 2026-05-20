@@ -1,6 +1,6 @@
 # 현재 테스트 상태
 
-마지막 업데이트: 2026-05-20 14:25 KST
+마지막 업데이트: 2026-05-20 16:35 KST
 
 ## 결론
 
@@ -70,19 +70,29 @@ windows\cache\downloads\rpi-boot-eeprom-recovery-2026-01-09-2711-vl805-000138c0-
 SHA256 43639F3D17C53D47C1E54D6B6C9229BB095014A15A93BD948717B45343EA22F7
 ```
 
-현재 `S:` 상태:
+현재 EEPROM SD 상태:
 
 ```text
 Disk 3
 Generic STORAGE DEVICE
 USB
 29.72 GB
-S: bootfs FAT32
+MBR
+Partition 1: FAT32 XINT13, 256 MiB
 IsBoot: false
 IsSystem: false
 ```
 
-중요: 현재 `S:`는 비어 있는 EEPROM 전용 SD가 아니라 Raspberry Pi OS bootfs 카드처럼 보입니다. `RPi4 EEPROM SD`를 실행하면 이 29.72 GB SD 전체가 지워집니다. 다음 세션에서는 먼저 사용자에게 이 SD를 지워도 되는지 확인해야 합니다.
+상태: GUI에서 물리 디스크 선택 창을 확인한 뒤 Disk 3에 Pi 4 Network Boot EEPROM 이미지를 썼습니다. 더 이상 `S:` 고정으로 쓰지 않습니다.
+
+## 2026-05-20 16:35 추가 확인
+
+- 루트 `AGENTS.md`를 복원해 Codex/agent 작업 규칙을 repo에 고정했습니다.
+- haneWIN 서비스와 설치 폴더를 PC에서 제거했습니다.
+- haneWIN proof 로그는 `D:\logs`에 보존했습니다.
+- 현재 부팅 서비스는 `RpiBootServiceLite`와 프로젝트 로컬 `WinNFSd`로 실행 중입니다.
+- `RPi4 EEPROM SD`는 쓰기 전에 물리 디스크를 선택하게 바뀌었습니다.
+- Disk 3 EEPROM SD 쓰기 후 상태는 MBR + 256 MiB FAT32 XINT13 파티션입니다.
 
 ## 새 RPi4 복제 순서
 
@@ -115,9 +125,9 @@ DHCP ignored unknown MAC 88:36:6c:fa:64:b8
 
 ## 다음 액션
 
-1. 현재 `S:` SD를 EEPROM용으로 지워도 되는지 확인.
-2. 지워도 되면 `RPi4 EEPROM SD` 실제 쓰기 실행.
+1. 새 RPi4를 완성된 EEPROM SD로 한 번 부팅.
+2. 전원을 끄고 SD 제거.
 3. 새 RPi4 serial/MAC 확보.
 4. `새 RPi4 등록/복제` 실행.
-5. `부팅 서비스 시작` 재실행.
+5. DHCP 예약이 바뀌면 `부팅 서비스 시작` 재실행.
 6. SD 제거 상태에서 새 RPi4 netboot 확인.

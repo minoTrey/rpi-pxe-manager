@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-20T14:25:00+09:00",
+  "updatedAt": "2026-05-20T16:35:00+09:00",
   "nodes": [
     { "id": "server-pc", "type": "machine", "label": "Windows server PC", "ip": "10.73.0.10" },
     { "id": "router", "type": "network", "label": "ipTIME router", "ip": "10.73.0.1" },
@@ -13,7 +13,9 @@
     { "id": "gui-manager", "type": "tool", "label": "RPI-Netboot-Manager.exe" },
     { "id": "golden-d80c0b88", "type": "golden-source", "label": "Known-good d80c0b88 bootfs/rootfs" },
     { "id": "eeprom-cache", "type": "artifact", "label": "windows/cache/downloads Pi 4 EEPROM image" },
-    { "id": "sd-disk3", "type": "media", "label": "Disk 3 S: bootfs 29.72GB SD candidate" },
+    { "id": "sd-disk3", "type": "media", "label": "Disk 3 EEPROM SD written, 29.72GB USB, 256MiB FAT32 image partition" },
+    { "id": "eeprom-selector", "type": "tool", "label": "GUI physical disk selector for RPi4 EEPROM SD" },
+    { "id": "hanewin-cleanup", "type": "event", "label": "haneWIN services and install folders removed" },
     { "id": "legacy-workspace", "type": "workspace", "label": "rpi-netboot-windows legacy snapshot" },
     { "id": "active-workspace", "type": "workspace", "label": "rpi-pxe-manager/windows active workspace" }
   ],
@@ -28,7 +30,10 @@
     { "from": "clone-script", "to": "golden-d80c0b88", "type": "clones_from" },
     { "from": "gui-manager", "to": "clone-script", "type": "wraps" },
     { "from": "gui-manager", "to": "eeprom-cache", "type": "uses_for_eeprom_sd" },
-    { "from": "sd-disk3", "to": "eeprom-cache", "type": "candidate_write_target_needs_user_confirm" },
+    { "from": "eeprom-selector", "to": "sd-disk3", "type": "selected_target" },
+    { "from": "gui-manager", "to": "eeprom-selector", "type": "opens_before_eeprom_write" },
+    { "from": "sd-disk3", "to": "eeprom-cache", "type": "written_from" },
+    { "from": "hanewin-cleanup", "to": "provider-hanewin", "type": "removed_from_pc_preserved_logs" },
     { "from": "active-workspace", "to": "gui-manager", "type": "contains" },
     { "from": "legacy-workspace", "to": "active-workspace", "type": "superseded_by" },
     { "from": "provider-linux-nfs", "to": "provider-hanewin", "type": "production_candidate_replaces_proof_provider" }

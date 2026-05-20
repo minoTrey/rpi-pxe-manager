@@ -1,6 +1,6 @@
 # Project Memory
 
-Last updated: 2026-05-20 14:25 KST
+Last updated: 2026-05-20 16:35 KST
 
 ## Goal
 
@@ -87,6 +87,11 @@ Meaning:
 - Updated SD card docs and status wording from `권장 순서` to `작업 흐름`.
 - Confirmed current `S:` is a 29.72 GB USB SD (`bootfs` FAT32); EEPROM write would erase it.
 - Documented that new RPi4 clone flow still needs manual serial and MAC input.
+- Restored repository-level `AGENTS.md` from repo memory and Codex GUI traces.
+- Changed the GUI `RPi4 EEPROM SD` flow so the operator must choose a physical disk before writing; it no longer assumes `S:`.
+- Removed haneWIN services and local install folders from this PC. haneWIN proof logs remain in `D:\logs`.
+- Restarted the boot services on the production candidate path: `RpiBootServiceLite` for DHCP/TFTP and project-local `WinNFSd` for rootfs.
+- Wrote the Pi 4 Network Boot EEPROM image to Disk 3 after user confirmation.
 
 ## EEPROM SD Checkpoint
 
@@ -102,19 +107,20 @@ Hash:
 SHA256 43639F3D17C53D47C1E54D6B6C9229BB095014A15A93BD948717B45343EA22F7
 ```
 
-Current target candidate:
+Written target:
 
 ```text
 Disk 3
 Generic STORAGE DEVICE
 USB
 29.72 GB
-S: bootfs FAT32
+MBR
+Partition 1: FAT32 XINT13, 256 MiB
 IsBoot: false
 IsSystem: false
 ```
 
-Warning: this is currently a Raspberry Pi OS bootfs-style SD. Do not run `RPi4 EEPROM SD` unless the user confirms it can be erased.
+Status: EEPROM SD write completed. Windows currently does not show the old `S: bootfs` / `F:` layout; that is expected after writing the EEPROM image.
 
 ## Clone Flow
 
@@ -146,11 +152,11 @@ Known limitation:
 
 ## Next Work
 
-1. Ask whether the current `S:` SD may be erased.
-2. If yes, run `RPi4 EEPROM SD` and verify write.
+1. Boot the target RPi4 once from the EEPROM SD.
+2. Power off the target RPi4 and remove the SD.
 3. Confirm target Pi serial/MAC.
 4. Register/clone the new RPi4.
-5. Restart boot services.
+5. Restart boot services if reservations changed.
 6. Test SD-less netboot.
 7. Improve clone dialog to surface unknown MAC candidates from `D:\logs\rpi-boot-lite.log`.
 

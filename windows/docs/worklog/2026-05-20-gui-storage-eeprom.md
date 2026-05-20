@@ -159,10 +159,59 @@ Future UX improvement: parse unknown MAC candidates from that log and show them 
 
 ## Next actions
 
-1. Confirm whether current `S:` can be erased.
-2. Run actual EEPROM SD write if confirmed.
+1. Boot the target RPi4 once from the completed EEPROM SD.
+2. Power off and remove the SD.
 3. Confirm serial/MAC for the new RPi4.
 4. Clone/register the new RPi4.
-5. Restart boot services.
+5. Restart boot services if reservations changed.
 6. Test SD-less boot.
 7. Update GitHub PR #1 and Linear `3D-5` after the next verdict.
+
+## 16:35 update
+
+Completed after the initial handoff:
+
+- Restored root `AGENTS.md` from repo-backed memory, Obsidian, Hermes, GitHub/Linear state, and Codex GUI traces.
+- Removed haneWIN services and install folders from this PC:
+  - `DHCPservice`
+  - `TFTPService`
+  - `NFSserver`
+  - `PMAPDaemon`
+  - `C:\Program Files\dhcp`
+  - `C:\Program Files\tftp`
+  - `C:\Program Files\nfsd`
+  - `D:\tools\rpi-netboot\hanewin-portable`
+- Preserved haneWIN proof logs under `D:\logs`.
+- Restarted active boot services on:
+  - `D:\tools\rpi-netboot\bin\RpiBootServiceLite.exe`
+  - `D:\tools\rpi-netboot\winnfsd\WinNFSd.exe`
+- Added GUI physical-disk selection for `RPi4 EEPROM SD`; the write flow no longer assumes `S:`.
+- Verified the selector window appears before writing.
+- Wrote the Pi 4 Network Boot EEPROM image to Disk 3 after user confirmation.
+
+Post-write Disk 3 state:
+
+```text
+Disk 3
+Generic STORAGE DEVICE
+USB
+29.72 GB
+MBR
+Partition 1: FAT32 XINT13, 256 MiB
+IsBoot false
+IsSystem false
+```
+
+Validation:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\gui\build-gui.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\rpi-sd-card.ps1 list -CacheDir .\windows\cache\downloads
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\lite-provider.ps1 status -Config .\windows\lab-10.73.json
+```
+
+Cleanup evidence:
+
+```text
+D:\logs\hanewin-cleanup-20260520-1625.log
+```
