@@ -33,3 +33,4 @@
 - 17:14 - Moved all remaining `D:\downloads` contents into `windows\cache\downloads`, rebuilt the GUI so the default SD flow is `RPi4 OS SD 작성`, and pinned it to Raspberry Pi OS Lite 64-bit Trixie `2026-04-21-raspios-trixie-arm64-lite.img`.
 - 17:30 - Scoped `저장소 설정` and `저장소 열기` to the `서버 PC 준비` screen only, removing repeated storage controls from task-specific screens.
 - 17:34 - Diagnosed the SD write "error" as the old PowerShell byte-by-byte verifier stalling after the image write. Replaced verification with compiled C# buffer comparison, added `verify-image`, and verified Disk 3 against the pinned OS image.
+- 18:10 - Added automatic new-RPi discovery: `RpiBootServiceLite` now gives Raspberry Pi MAC OUIs a temporary `10.73.0.180`-`10.73.0.199` lease, listens on TCP 8088 for OS SD first-boot reports, and the clone dialog pre-fills serial/MAC/IP from `D:\logs\rpi-provisioning.jsonl`.

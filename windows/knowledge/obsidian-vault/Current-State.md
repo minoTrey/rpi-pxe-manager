@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-05-20 17:34 KST
+Updated: 2026-05-20 18:10 KST
 
 ## Active Workspace
 
@@ -31,6 +31,9 @@ Do not use `C:\Users\test\Documents\workspace\rpi-netboot-windows` for active wo
 - Known-good RPi4 IP: `10.73.0.155`
 - Golden bootfs: `D:\tftp\d80c0b88`
 - Golden rootfs: `D:\rootfs\d80c0b88`
+- Discovery lease pool: `10.73.0.180`-`10.73.0.199` for Raspberry Pi MAC OUIs
+- First-boot provisioning listener: `http://10.73.0.10:8088/provision/report`
+- Provisioning report log: `D:\logs\rpi-provisioning.jsonl`
 
 ## Latest Stable Verdict
 
@@ -52,6 +55,7 @@ Interpretation:
 - GUI cleanup and physical-disk selection were added.
 - `D:\downloads` was emptied into `windows\cache\downloads`.
 - GUI default SD flow now writes Raspberry Pi OS, not EEPROM.
+- The OS SD write now patches cloud-init `user-data`, `meta-data`, and `network-config` so the target Pi reports serial, MAC, IP, model, and EEPROM boot order back to the manager on first boot.
 - The pinned image is `2026-04-21-raspios-trixie-arm64-lite.img`.
 - `저장소 설정` and `저장소 열기` now appear only on `서버 PC 준비`, not on every task screen.
 - The old PowerShell byte-by-byte verifier was too slow and looked like an error/stall. It is now replaced with a compiled C# buffer comparer plus `verify-image`.
@@ -97,8 +101,8 @@ haneWIN is no longer installed on this PC.
 Current boot services:
 
 ```text
-RpiBootServiceLite PID 6696: DHCP/TFTP
-WinNFSd PID 11120: NFS 111/2049 on 10.73.0.10
+RpiBootServiceLite PID 10076: DHCP/TFTP/Provisioning
+WinNFSd PID 780: NFS 111/2049 on 10.73.0.10
 ```
 
 ## Clone Flow
@@ -107,21 +111,13 @@ Recommended operator flow:
 
 1. Use `RPi4 OS SD 작성` to write Raspberry Pi OS Lite 64-bit Trixie to an SD card.
 2. Boot the target RPi4 from that OS SD.
-3. Confirm serial and MAC from Raspberry Pi OS.
-4. Update EEPROM/network boot order from the OS if needed.
-5. Run `새 RPi4 등록/복제` in the GUI.
-6. Restart boot services if DHCP reservations changed.
-7. Remove SD and test Ethernet netboot.
-
-Potential next UX improvement:
-
-- Parse `D:\logs\rpi-boot-lite.log` for `DHCP ignored unknown MAC ...`.
-- Show unknown MAC candidates in the clone dialog.
-- Serial still needs user confirmation unless a future provisioning helper reports it.
+3. The manager gives Raspberry Pi MACs a temporary discovery lease and waits for the first-boot provisioning report.
+4. Run `새 RPi4 등록/복제` in the GUI. The newest report pre-fills serial, MAC, and IP; the operator confirms the values and chooses the device id.
+5. Restart boot services if DHCP reservations changed.
+6. Remove SD and test Ethernet netboot.
 
 ## Next Move
 
-1. Eject Disk 3 cleanly.
-2. Boot the target RPi4 from the verified OS SD.
-3. Confirm serial/MAC and EEPROM/network boot order.
-4. Continue with `새 RPi4 등록/복제`.
+1. Re-write the SD with the updated `RPi4 OS SD 작성` flow so the first-boot reporter is present.
+2. Boot the target RPi4 from that SD and wait for `D:\logs\rpi-provisioning.jsonl`.
+3. Continue with `새 RPi4 등록/복제`.

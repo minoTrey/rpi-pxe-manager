@@ -31,7 +31,7 @@ RPI-Netboot-Manager.exe
 7. 도움말
 ```
 
-첫 RPi4는 네트워크 부팅 성공 상태까지 검증되었습니다. 새 장비는 `새 RPi4 등록/복제` 흐름으로 bootfs/rootfs와 내부 설정을 만듭니다.
+첫 RPi4는 네트워크 부팅 성공 상태까지 검증되었습니다. 새 장비는 `RPi4 OS SD 작성`으로 만든 첫 부팅 리포터 포함 OS SD에서 serial/MAC/IP를 자동 수집한 뒤, `새 RPi4 등록/복제` 흐름으로 bootfs/rootfs와 내부 설정을 만듭니다.
 
 ## 현재 운영 기준
 

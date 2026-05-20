@@ -9,6 +9,36 @@ windows\cache\downloads\2026-04-21-raspios-trixie-arm64-lite.img
 Raspberry Pi OS Lite 64-bit Trixie
 ```
 
+## First-Boot Provisioning
+
+The default `prepare-rpios-lite-trixie` flow now patches the OS SD boot
+partition after the raw image write. The patch writes cloud-init files that
+start a first-boot reporter on the Raspberry Pi.
+
+The reporter sends this payload to the Windows manager:
+
+```text
+http://10.73.0.10:8088/provision/report
+```
+
+Reported fields include:
+
+- serial, trimmed to the last 8 hex characters
+- Ethernet MAC
+- current IP
+- model string
+- EEPROM `BOOT_ORDER` when `vcgencmd` is available
+- short `rpi-eeprom-update` status output
+
+`RpiBootServiceLite` listens on TCP 8088 and stores reports in:
+
+```text
+D:\logs\rpi-provisioning.jsonl
+```
+
+The clone dialog reads the newest provisioning report and pre-fills serial,
+MAC, and IP before `새 RPi4 등록/복제`.
+
 ## 디스크 목록 확인
 
 ```powershell

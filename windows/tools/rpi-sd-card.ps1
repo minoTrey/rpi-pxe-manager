@@ -12,9 +12,12 @@ param(
     [string] $CacheDir = "",
     [string] $OsListUrl = "https://downloads.raspberrypi.com/os_list_imagingutility_v4.json",
     [int] $MaxDiskSizeGB = 64,
+    [string] $ProvisionServer = "10.73.0.10",
+    [int] $ProvisionPort = 8088,
 
     [switch] $IUnderstand,
     [switch] $NoVerify,
+    [switch] $NoProvision,
     [switch] $AllowNonUsb,
     [switch] $AllowLargeDisk
 )
@@ -24,6 +27,9 @@ $ErrorActionPreference = "Stop"
 if ([string]::IsNullOrWhiteSpace($CacheDir)) {
     $CacheDir = Join-Path (Split-Path -Parent $PSScriptRoot) "cache\downloads"
 }
+
+$script:LastWrittenDiskNumber = $null
+$script:LastWrittenImagePath = ""
 
 function Assert-Admin {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -417,6 +423,210 @@ function Verify-RawImage {
     }
 }
 
+function Get-FreeDriveLetter {
+    $used = @{}
+    foreach ($volume in @(Get-Volume -ErrorAction SilentlyContinue)) {
+        if ($volume.DriveLetter) {
+            $used[[string]$volume.DriveLetter] = $true
+        }
+    }
+    foreach ($letter in @("R", "S", "T", "U", "V", "W", "X", "Y", "Z")) {
+        if (-not $used.ContainsKey($letter)) {
+            return $letter
+        }
+    }
+    throw "No free temporary drive letter is available for the Raspberry Pi OS boot partition."
+}
+
+function Resolve-RpiOsBootPartition {
+    param([Parameter(Mandatory = $true)][int] $DiskNumber)
+
+    for ($attempt = 0; $attempt -lt 12; $attempt++) {
+        $partitions = @(Get-Partition -DiskNumber $DiskNumber -ErrorAction SilentlyContinue | Sort-Object PartitionNumber)
+        foreach ($partition in $partitions) {
+            $volume = $partition | Get-Volume -ErrorAction SilentlyContinue
+            if ($volume -and $volume.FileSystem -eq "FAT32" -and $volume.FileSystemLabel -eq "bootfs") {
+                return $partition
+            }
+        }
+        foreach ($partition in $partitions) {
+            if ($partition.PartitionNumber -eq 1 -and [UInt64]$partition.Size -le 1GB) {
+                return $partition
+            }
+        }
+        Start-Sleep -Milliseconds 750
+    }
+
+    throw "Could not find the Raspberry Pi OS bootfs partition on PhysicalDrive$DiskNumber."
+}
+
+function Get-RpiProvisionUserData {
+    param(
+        [Parameter(Mandatory = $true)][string] $Server,
+        [Parameter(Mandatory = $true)][int] $Port
+    )
+
+    $template = @'
+#cloud-config
+hostname: rpi-provision
+manage_etc_hosts: true
+ssh_pwauth: false
+write_files:
+  - path: /usr/local/sbin/rpi-netboot-report.py
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env python3
+      import json
+      import os
+      import socket
+      import subprocess
+      import time
+      import urllib.request
+
+      SERVER = "__SERVER__"
+      PORT = __PORT__
+
+      def read_text(path):
+          try:
+              with open(path, "rb") as handle:
+                  return handle.read().decode("utf-8", "ignore").strip("\x00 \t\r\n")
+          except Exception:
+              return ""
+
+      def run(args):
+          try:
+              return subprocess.check_output(args, stderr=subprocess.DEVNULL, text=True, timeout=8).strip()
+          except Exception:
+              return ""
+
+      def run_shell(command):
+          try:
+              return subprocess.check_output(command, shell=True, stderr=subprocess.DEVNULL, text=True, timeout=8).strip()
+          except Exception:
+              return ""
+
+      def cpu_serial():
+          try:
+              with open("/proc/cpuinfo", "r", encoding="utf-8", errors="ignore") as handle:
+                  for line in handle:
+                      if line.lower().startswith("serial"):
+                          value = line.split(":", 1)[1].strip().lower()
+                          return value[-8:] if len(value) > 8 else value
+          except Exception:
+              pass
+          return ""
+
+      def primary_ip():
+          text = run(["hostname", "-I"]).split()
+          if text:
+              return text[0]
+          try:
+              sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+              sock.connect((SERVER, PORT))
+              ip = sock.getsockname()[0]
+              sock.close()
+              return ip
+          except Exception:
+              return ""
+
+      def boot_order(config):
+          for line in config.splitlines():
+              if line.startswith("BOOT_ORDER="):
+                  return line.split("=", 1)[1].strip()
+          return ""
+
+      eeprom_config = run(["vcgencmd", "bootloader_config"])
+      payload = {
+          "source": "rpios-provision-sd",
+          "serial": cpu_serial(),
+          "mac": read_text("/sys/class/net/eth0/address").lower(),
+          "ip": primary_ip(),
+          "hostname": socket.gethostname(),
+          "model": read_text("/proc/device-tree/model"),
+          "boot_order": boot_order(eeprom_config),
+          "eeprom_update": run_shell("rpi-eeprom-update 2>/dev/null | head -n 20"),
+      }
+
+      url = "http://{}:{}/provision/report".format(SERVER, PORT)
+      for attempt in range(1, 61):
+          payload["attempt"] = attempt
+          payload["uptime_seconds"] = int(float(read_text("/proc/uptime").split()[0])) if read_text("/proc/uptime") else 0
+          data = json.dumps(payload, sort_keys=True).encode("utf-8")
+          request = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+          try:
+              with urllib.request.urlopen(request, timeout=5) as response:
+                  if 200 <= response.status < 300:
+                      raise SystemExit(0)
+          except Exception:
+              time.sleep(5)
+      raise SystemExit(1)
+runcmd:
+  - [ sh, -xc, "systemctl enable ssh 2>/dev/null || true" ]
+  - [ sh, -xc, "systemctl start ssh 2>/dev/null || true" ]
+  - [ sh, -xc, "python3 /usr/local/sbin/rpi-netboot-report.py || true" ]
+'@
+
+    return $template.Replace("__SERVER__", $Server).Replace("__PORT__", [string]$Port)
+}
+
+function Patch-RpiOsProvisioning {
+    param(
+        [Parameter(Mandatory = $true)][int] $DiskNumber,
+        [Parameter(Mandatory = $true)][string] $Server,
+        [Parameter(Mandatory = $true)][int] $Port
+    )
+
+    $storageRefresh = Get-Command Update-HostStorageCache -ErrorAction SilentlyContinue
+    if ($storageRefresh) {
+        Update-HostStorageCache
+    }
+
+    $partition = Resolve-RpiOsBootPartition -DiskNumber $DiskNumber
+    $assignedLetter = $false
+    $accessPath = $null
+    $letter = [string]$partition.DriveLetter
+    if ([string]::IsNullOrWhiteSpace($letter)) {
+        $letter = Get-FreeDriveLetter
+        $accessPath = "$letter`:\"
+        Add-PartitionAccessPath -DiskNumber $DiskNumber -PartitionNumber $partition.PartitionNumber -AccessPath $accessPath
+        $assignedLetter = $true
+        Start-Sleep -Milliseconds 750
+    } else {
+        $accessPath = "$letter`:\"
+    }
+
+    try {
+        if (-not (Test-Path -LiteralPath $accessPath)) {
+            throw "Bootfs access path is not mounted: $accessPath"
+        }
+        $userData = Get-RpiProvisionUserData -Server $Server -Port $Port
+        $metaData = @(
+            "instance_id: rpi-netboot-provision-$([DateTime]::UtcNow.ToString("yyyyMMddHHmmss"))",
+            "local-hostname: rpi-provision",
+            "dsmode: local"
+        ) -join "`n"
+        $networkConfig = @(
+            "network:",
+            "  version: 2",
+            "  ethernets:",
+            "    eth0:",
+            "      dhcp4: true",
+            "      optional: true"
+        ) -join "`n"
+
+        Set-Content -LiteralPath (Join-Path $accessPath "user-data") -Value $userData -Encoding ASCII
+        Set-Content -LiteralPath (Join-Path $accessPath "meta-data") -Value $metaData -Encoding ASCII
+        Set-Content -LiteralPath (Join-Path $accessPath "network-config") -Value $networkConfig -Encoding ASCII
+        Write-Host "Provisioning patch applied to bootfs on PhysicalDrive$DiskNumber."
+        Write-Host "Provision report target: http://$Server`:$Port/provision/report"
+    } finally {
+        if ($assignedLetter -and $accessPath) {
+            Remove-PartitionAccessPath -DiskNumber $DiskNumber -PartitionNumber $partition.PartitionNumber -AccessPath $accessPath -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Invoke-WriteImageCommand {
     param([string] $RequestedImage)
 
@@ -443,6 +653,8 @@ function Invoke-WriteImageCommand {
     if ($storageRefresh) {
         Update-HostStorageCache
     }
+    $script:LastWrittenDiskNumber = $disk.Number
+    $script:LastWrittenImagePath = $imagePath
     Write-Host "Image write completed."
 }
 
@@ -483,6 +695,9 @@ switch ($Command) {
     "prepare-rpios-lite-trixie" {
         $download = Save-RpiOsLiteTrixieImage
         Invoke-WriteImageCommand $download.Image
+        if (-not $NoProvision) {
+            Patch-RpiOsProvisioning -DiskNumber $script:LastWrittenDiskNumber -Server $ProvisionServer -Port $ProvisionPort
+        }
     }
     "write-image" {
         Invoke-WriteImageCommand $Image

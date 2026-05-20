@@ -1,6 +1,6 @@
 # Project Memory
 
-Last updated: 2026-05-20 17:34 KST
+Last updated: 2026-05-20 18:10 KST
 
 ## Goal
 
@@ -56,6 +56,9 @@ That folder is a legacy snapshot. Its old launcher exe was removed locally.
 | Golden RPi4 MAC | `88:a2:9e:4f:a9:b1` |
 | Golden RPi4 serial | `d80c0b88` |
 | Golden RPi4 IP | `10.73.0.155` |
+| Discovery pool | `10.73.0.180`-`10.73.0.199` for Raspberry Pi MAC OUIs |
+| Provision listener | `http://10.73.0.10:8088/provision/report` |
+| Provision log | `D:\logs\rpi-provisioning.jsonl` |
 
 ## Current State
 
@@ -91,6 +94,9 @@ Meaning:
 - Scoped `저장소 설정` and `저장소 열기` to `서버 PC 준비` only; other task screens now show only their primary task action.
 - Fixed the SD verifier performance bug by moving block comparison into a compiled C# helper and adding `verify-image`.
 - Verified Disk 3 against `2026-04-21-raspios-trixie-arm64-lite.img` after the GUI write.
+- Added first-boot provisioning: OS SD cloud-init now reports serial, MAC, IP, model, EEPROM `BOOT_ORDER`, and short EEPROM status to the Windows manager.
+- Extended `RpiBootServiceLite` with Raspberry Pi-only dynamic discovery leases and a TCP 8088 provisioning receiver.
+- Updated the clone dialog to read `D:\logs\rpi-provisioning.jsonl` and pre-fill serial, MAC, and IP.
 
 ## OS SD Checkpoint
 
@@ -138,19 +144,14 @@ Current required sequence:
 
 1. Use `RPi4 OS SD 작성` to write Raspberry Pi OS Lite 64-bit Trixie to the selected SD.
 2. Boot the new RPi4 from that OS SD.
-3. From Raspberry Pi OS, confirm serial and MAC.
-   - Serial: `cat /proc/cpuinfo | grep Serial`; use last 8 hex chars.
-   - MAC: `cat /sys/class/net/eth0/address`.
-4. If needed, update EEPROM/network boot order from the booted OS.
-5. GUI `새 RPi4 등록/복제`.
-6. GUI `부팅 서비스 시작` to reload DHCP reservation.
-7. Power off, remove SD, and boot the new RPi4 over Ethernet.
+3. The manager gives Raspberry Pi MACs a temporary discovery lease and waits for the first-boot report.
+4. GUI `새 RPi4 등록/복제`; confirm the pre-filled serial/MAC/IP and choose the device id.
+5. GUI `부팅 서비스 시작` to reload DHCP reservation if the clone changed config.
+6. Power off, remove SD, and boot the new RPi4 over Ethernet.
 
 Known limitation:
 
-- The service log can show unknown MACs, for example `DHCP ignored unknown MAC ...`.
-- It does not reliably provide the RPi4 serial yet.
-- Next UX improvement should parse unknown MAC candidates for the clone dialog while keeping serial as explicit input.
+- The SD written before this provisioning change does not contain the reporter. Re-write it with `RPi4 OS SD 작성` before expecting automatic serial discovery.
 
 ## Tracking Structure
 
@@ -162,12 +163,11 @@ Known limitation:
 
 ## Next Work
 
-1. Eject Disk 3 cleanly and boot the target RPi4 from the OS SD.
-2. Confirm target Pi serial/MAC and EEPROM/network boot order.
-3. Register/clone the new RPi4.
+1. Re-write the SD with the updated `RPi4 OS SD 작성` flow.
+2. Boot the target RPi4 from the updated OS SD and watch for `D:\logs\rpi-provisioning.jsonl`.
+3. Register/clone the new RPi4 using the pre-filled values.
 4. Restart boot services if reservations changed.
 5. Test SD-less netboot.
-6. Improve clone dialog to surface unknown MAC candidates from `D:\logs\rpi-boot-lite.log`.
 
 ## Operating Rule
 

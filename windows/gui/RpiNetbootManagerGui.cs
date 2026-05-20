@@ -178,8 +178,8 @@ namespace RpiNetbootWindowsGui
             actions.Add(new ActionDefinition("status", "상태 확인", "RPi4 네트워크 부팅 상태를 읽기 전용으로 확인합니다.", IconKind.Pulse, false));
             actions.Add(new ActionDefinition("server-setup", "서버 PC 준비", "선택한 저장소와 이더넷 10.73.0.10 구성을 자동으로 맞춥니다.", IconKind.Server, true));
             actions.Add(new ActionDefinition("lite-provider-start", "부팅 서비스 시작", "DHCP, TFTP, NFS 서비스를 시작해 RPi4 네트워크 부팅을 받을 준비를 합니다.", IconKind.Network, true));
-            actions.Add(new ActionDefinition("clone-rpi4", "새 RPi4 등록/복제", "기기 번호, 시리얼, MAC을 입력해 새 RPi4의 bootfs/rootfs와 내부 설정을 만듭니다.", IconKind.Package, false));
-            actions.Add(new ActionDefinition("prepare-sd", "RPi4 OS SD 작성", "선택한 SD 디스크에 Raspberry Pi OS Lite 64-bit Trixie 이미지를 씁니다.", IconKind.SdCard, true, true));
+            actions.Add(new ActionDefinition("clone-rpi4", "새 RPi4 등록/복제", "OS SD 첫 부팅 리포트로 감지한 시리얼/MAC을 확인해 새 RPi4의 bootfs/rootfs와 내부 설정을 만듭니다.", IconKind.Package, false));
+            actions.Add(new ActionDefinition("prepare-sd", "RPi4 OS SD 작성", "선택한 SD 디스크에 Raspberry Pi OS Lite 64-bit Trixie 이미지와 자동 등록 리포터를 씁니다.", IconKind.SdCard, true, true));
             actions.Add(new ActionDefinition("zero2w-gadget-sd", "Zero 2 W Gadget SD", "S: SD를 Zero 2 W USB Ethernet gadget 부팅용으로 패치합니다.", IconKind.SdCard, false, true));
             actions.Add(new ActionDefinition("docs", "도움말", "운영 절차와 복제 Runbook을 엽니다.", IconKind.Doc, false));
         }
@@ -687,7 +687,7 @@ namespace RpiNetbootWindowsGui
         {
             if (task == "prepare-sd")
             {
-                return "RPi4 부팅용 Raspberry Pi OS SD를 만듭니다. 버튼을 누르면 현재 연결된 디스크 목록을 보여주고, 사용자가 선택한 디스크에만 Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지를 씁니다.\n\nboot/system 디스크, 미디어 없음, USB가 아닌 디스크, 64GB 초과 디스크는 선택할 수 없습니다.\n\n다음: RPi4를 이 OS SD로 부팅해 시리얼/MAC을 확인하고 EEPROM/network boot 설정을 진행합니다.";
+                return "RPi4 부팅용 Raspberry Pi OS SD를 만듭니다. 버튼을 누르면 현재 연결된 디스크 목록을 보여주고, 사용자가 선택한 디스크에만 Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지를 씁니다.\n\nboot/system 디스크, 미디어 없음, USB가 아닌 디스크, 64GB 초과 디스크는 선택할 수 없습니다.\n\n다음: RPi4를 이 OS SD로 부팅하면 관리자 서비스가 MAC에 임시 IP를 주고, OS가 시리얼/MAC/EEPROM boot order를 자동 보고합니다.";
             }
 
             switch (task)
@@ -699,7 +699,7 @@ namespace RpiNetbootWindowsGui
                 case "lite-provider-start":
                     return "RPi4가 네트워크 부팅 요청을 보낼 때 응답할 DHCP/TFTP/NFS 서비스를 시작합니다.\n\n다음: 상태 확인을 누르고 새 RPi4 전원을 다시 넣습니다.";
                 case "clone-rpi4":
-                    return "새 Raspberry Pi 4를 등록하고 현재 성공한 bootfs/rootfs에서 복제합니다.\n\n입력 예:\n- 기기 번호: rpi-001\n- 시리얼: 8자리 hex\n- MAC: 88:a2:9e:xx:xx:xx\n\n자동 반영:\n- " + GetConfiguredTftpRoot() + "\\<serial>\n- " + GetConfiguredRootfsRoot() + "\\<serial>\n- hostname\n- /etc/rpi-netboot/client.json\n- machine-id/SSH host key 초기화";
+                    return "새 Raspberry Pi 4를 등록하고 현재 성공한 bootfs/rootfs에서 복제합니다.\n\nOS SD 첫 부팅 리포트가 있으면 시리얼/MAC/IP가 자동으로 채워집니다. 값이 맞는지만 확인하고 기기 번호를 정하세요.\n\n자동 반영:\n- " + GetConfiguredTftpRoot() + "\\<serial>\n- " + GetConfiguredRootfsRoot() + "\\<serial>\n- hostname\n- /etc/rpi-netboot/client.json\n- machine-id/SSH host key 초기화";
                 case "zero2w-gadget-sd":
                     return "Zero 2 W는 네트워크 부팅 대상이 아닙니다. S:의 Raspberry Pi OS boot 파티션을 USB Ethernet gadget용으로 패치합니다.\n\n연결: PWR IN이 아니라 mini HDMI 옆 USB data 포트를 PC에 꽂습니다.";
                 case "docs":
@@ -748,7 +748,7 @@ namespace RpiNetbootWindowsGui
 
             if (action.Task == "clone-rpi4")
             {
-                using (var dialog = new CloneRpi4Dialog(GetConfiguredTftpRoot(), GetConfiguredRootfsRoot()))
+                using (var dialog = new CloneRpi4Dialog(GetConfiguredTftpRoot(), GetConfiguredRootfsRoot(), LoadLatestProvisionCandidate()))
                 {
                     if (dialog.ShowDialog(this) != DialogResult.OK) return;
                     pendingCloneRequest = dialog.Request;
@@ -860,9 +860,9 @@ namespace RpiNetbootWindowsGui
             if (action.Task == "prepare-sd" && pendingSdImageWriteRequest != null)
             {
                 return "RPi4 OS SD를 만듭니다.\n\n대상: " + pendingSdImageWriteRequest.Summary +
-                       "\n실행 내용: Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지 쓰기" +
+                       "\n실행 내용: Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지 쓰기 + 첫 부팅 자동 등록 리포터 적용" +
                        "\n주의: 선택한 디스크 전체 내용 삭제" +
-                       "\n\n이 SD로 Pi를 부팅한 뒤 시리얼/MAC 확인과 EEPROM/network boot 설정을 진행합니다. 계속하려면 [예]를 누르세요.";
+                       "\n\n이 SD로 Pi를 부팅하면 관리자가 시리얼/MAC/EEPROM boot order를 자동 수집합니다. 계속하려면 [예]를 누르세요.";
             }
 
             switch (action.Task)
@@ -872,7 +872,7 @@ namespace RpiNetbootWindowsGui
                 case "lite-provider-start":
                     return "부팅 서비스를 시작합니다.\n\n실행 내용:\n- DHCP/TFTP 서버 시작\n- rootfs 서비스 시작\n- DHCP/TFTP/NFS 방화벽 규칙 확인\n\nPi가 다음 DHCP에서 예약 IP를 받게 됩니다. 계속하려면 [예]를 누르세요.";
                 case "prepare-sd":
-                    return "RPi4 OS SD를 만듭니다.\n\n실행 내용: Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지 쓰기\n주의: 선택한 디스크 전체 내용 삭제\n\n계속하려면 [예]를 누르세요.";
+                    return "RPi4 OS SD를 만듭니다.\n\n실행 내용: Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지 쓰기 + 첫 부팅 자동 등록 리포터 적용\n주의: 선택한 디스크 전체 내용 삭제\n\n계속하려면 [예]를 누르세요.";
                 case "zero2w-gadget-sd":
                     return "Zero 2 W USB gadget SD를 패치합니다.\n\n대상: S:\n변경 파일: config.txt, cmdline.txt, user-data, ssh marker\n주의: Zero 2 W는 SD로 부팅합니다. RPi4 네트워크 부팅 대상에 넣지 않습니다.\n\nS:가 Zero 2 W용 OS SD이면 [예]를 누르세요.";
                 default:
@@ -1041,14 +1041,49 @@ namespace RpiNetbootWindowsGui
             {
                 if (!File.Exists(path)) return "";
                 string text = File.ReadAllText(path, Encoding.UTF8);
-                Match match = Regex.Match(text, "\"" + Regex.Escape(property) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
-                if (!match.Success) return "";
-                return Regex.Unescape(match.Groups[1].Value);
+                return ReadJsonField(text, property);
             }
             catch
             {
                 return "";
             }
+        }
+
+        private string ReadJsonField(string text, string property)
+        {
+            Match match = Regex.Match(text ?? "", "\"" + Regex.Escape(property) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
+            if (!match.Success) return "";
+            return Regex.Unescape(match.Groups[1].Value);
+        }
+
+        private ProvisionCandidate LoadLatestProvisionCandidate()
+        {
+            try
+            {
+                string path = Path.Combine(Path.Combine(GetConfiguredStorageRoot(), "logs"), "rpi-provisioning.jsonl");
+                if (!File.Exists(path)) return null;
+                string[] lines = File.ReadAllLines(path, Encoding.UTF8);
+                for (int i = lines.Length - 1; i >= 0; i--)
+                {
+                    string line = lines[i];
+                    string serial = ReadJsonField(line, "serial");
+                    string mac = ReadJsonField(line, "mac");
+                    if (string.IsNullOrWhiteSpace(serial) && string.IsNullOrWhiteSpace(mac)) continue;
+                    return new ProvisionCandidate
+                    {
+                        ReceivedAt = ReadJsonField(line, "received_at"),
+                        Serial = serial,
+                        Mac = mac,
+                        Ip = ReadJsonField(line, "ip"),
+                        Model = ReadJsonField(line, "model"),
+                        BootOrder = ReadJsonField(line, "boot_order")
+                    };
+                }
+            }
+            catch
+            {
+            }
+            return null;
         }
 
         private string NormalizeStorageRoot(string value)
@@ -1251,6 +1286,16 @@ namespace RpiNetbootWindowsGui
         public string Serial;
         public string Mac;
         public string Ip;
+    }
+
+    internal sealed class ProvisionCandidate
+    {
+        public string ReceivedAt;
+        public string Serial;
+        public string Mac;
+        public string Ip;
+        public string Model;
+        public string BootOrder;
     }
 
     internal sealed class SdImageWriteRequest
@@ -1679,7 +1724,7 @@ Get-Disk | Sort-Object Number | ForEach-Object {
 
         public CloneRpi4Request Request { get; private set; }
 
-        public CloneRpi4Dialog(string tftpRoot, string rootfsRoot)
+        public CloneRpi4Dialog(string tftpRoot, string rootfsRoot, ProvisionCandidate candidate)
         {
             Text = "새 RPi4 등록/복제";
             StartPosition = FormStartPosition.CenterParent;
@@ -1733,9 +1778,10 @@ Get-Disk | Sort-Object Number | ForEach-Object {
             serialBox = AddField(fields, 1, "RPi4 시리얼", "8자리 hex, 예: a1b2c3d4");
             macBox = AddField(fields, 2, "MAC 주소", "88:a2:9e:xx:xx:xx");
             ipBox = AddField(fields, 3, "예약 IP", "비워두면 자동 할당");
+            ApplyProvisionCandidate(candidate);
 
             var note = new Label();
-            note.Text = "현재 골든 소스: " + tftpRoot + "\\d80c0b88, " + rootfsRoot + "\\d80c0b88";
+            note.Text = BuildCandidateNote(tftpRoot, rootfsRoot, candidate);
             note.ForeColor = Color.FromArgb(15, 118, 110);
             note.BackColor = Color.FromArgb(220, 244, 239);
             note.TextAlign = ContentAlignment.MiddleLeft;
@@ -1788,6 +1834,38 @@ Get-Disk | Sort-Object Number | ForEach-Object {
             box.Tag = placeholder;
             fields.Controls.Add(box, 1, row);
             return box;
+        }
+
+        private void ApplyProvisionCandidate(ProvisionCandidate candidate)
+        {
+            if (candidate == null) return;
+            if (!string.IsNullOrWhiteSpace(candidate.Serial))
+            {
+                string serial = candidate.Serial.Trim().ToLowerInvariant();
+                serialBox.Text = serial.Length > 8 ? serial.Substring(serial.Length - 8) : serial;
+                if (string.IsNullOrWhiteSpace(deviceIdBox.Text) && serialBox.Text.Length >= 4)
+                {
+                    deviceIdBox.Text = "rpi-" + serialBox.Text.Substring(serialBox.Text.Length - 4);
+                }
+            }
+            if (!string.IsNullOrWhiteSpace(candidate.Mac)) macBox.Text = candidate.Mac.Trim().ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(candidate.Ip)) ipBox.Text = candidate.Ip.Trim();
+        }
+
+        private string BuildCandidateNote(string tftpRoot, string rootfsRoot, ProvisionCandidate candidate)
+        {
+            string golden = "Golden: " + tftpRoot + "\\d80c0b88, " + rootfsRoot + "\\d80c0b88";
+            if (candidate == null)
+            {
+                return golden + " | Waiting for OS SD provision report.";
+            }
+
+            string detected = "Detected";
+            if (!string.IsNullOrWhiteSpace(candidate.Serial)) detected += " serial=" + candidate.Serial;
+            if (!string.IsNullOrWhiteSpace(candidate.Mac)) detected += " mac=" + candidate.Mac;
+            if (!string.IsNullOrWhiteSpace(candidate.Ip)) detected += " ip=" + candidate.Ip;
+            if (!string.IsNullOrWhiteSpace(candidate.BootOrder)) detected += " boot=" + candidate.BootOrder;
+            return detected + " | " + golden;
         }
 
         private Button CreateDialogButton(string text, Color fill, Color textColor)

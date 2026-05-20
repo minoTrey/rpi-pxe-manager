@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-20T17:34:00+09:00",
+  "updatedAt": "2026-05-20T18:10:00+09:00",
   "nodes": [
     { "id": "server-pc", "type": "machine", "label": "Windows server PC", "ip": "10.73.0.10" },
     { "id": "router", "type": "network", "label": "ipTIME router", "ip": "10.73.0.1" },
@@ -21,7 +21,11 @@
     { "id": "legacy-workspace", "type": "workspace", "label": "rpi-netboot-windows legacy snapshot" },
     { "id": "active-workspace", "type": "workspace", "label": "rpi-pxe-manager/windows active workspace" },
     { "id": "d-downloads-cleanup", "type": "event", "label": "D:/downloads moved into project cache and emptied" },
-    { "id": "fast-sd-verify", "type": "tool", "label": "rpi-sd-card.ps1 verify-image with compiled C# buffer compare" }
+    { "id": "fast-sd-verify", "type": "tool", "label": "rpi-sd-card.ps1 verify-image with compiled C# buffer compare" },
+    { "id": "provision-listener", "type": "service", "label": "RpiBootServiceLite TCP 8088 provisioning listener" },
+    { "id": "discovery-lease-pool", "type": "network", "label": "Raspberry Pi discovery leases 10.73.0.180-10.73.0.199" },
+    { "id": "provision-log", "type": "artifact", "label": "D:/logs/rpi-provisioning.jsonl" },
+    { "id": "rpios-cloudinit-reporter", "type": "tool", "label": "OS SD cloud-init first boot reporter" }
   ],
   "edges": [
     { "from": "server-pc", "to": "router", "type": "connected_to" },
@@ -44,6 +48,12 @@
     { "from": "active-workspace", "to": "gui-manager", "type": "contains" },
     { "from": "legacy-workspace", "to": "active-workspace", "type": "superseded_by" },
     { "from": "provider-linux-nfs", "to": "provider-hanewin", "type": "production_candidate_replaces_proof_provider" },
-    { "from": "d-downloads-cleanup", "to": "download-cache", "type": "moved_into" }
+    { "from": "d-downloads-cleanup", "to": "download-cache", "type": "moved_into" },
+    { "from": "provider-winnfsd", "to": "provision-listener", "type": "runs_alongside" },
+    { "from": "gui-manager", "to": "provision-log", "type": "prefills_clone_dialog_from" },
+    { "from": "rpios-cloudinit-reporter", "to": "provision-listener", "type": "posts_first_boot_report_to" },
+    { "from": "provision-listener", "to": "provision-log", "type": "appends_reports_to" },
+    { "from": "provision-listener", "to": "discovery-lease-pool", "type": "shares_service_process_with" },
+    { "from": "rpios-trixie-image", "to": "rpios-cloudinit-reporter", "type": "patched_with" }
   ]
 }

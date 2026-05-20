@@ -1,6 +1,6 @@
 # 현재 테스트 상태
 
-마지막 업데이트: 2026-05-20 17:34 KST
+마지막 업데이트: 2026-05-20 18:10 KST
 
 ## 결론
 
@@ -52,6 +52,10 @@ C:\Users\test\Documents\workspace\rpi-pxe-manager\windows\RPI-Netboot-Manager.ex
 - `D:\downloads`의 모든 항목을 `windows\cache\downloads`로 옮겼고, `D:\downloads`는 비어 있다.
 - GUI 기본 SD 작업을 `RPi4 EEPROM SD`에서 `RPi4 OS SD 작성`으로 바꿨다.
 - 기본 OS 이미지는 `2026-04-21-raspios-trixie-arm64-lite.img`이다.
+- OS SD 작성 후 bootfs에 cloud-init 리포터를 심어서 첫 부팅 때 serial, MAC, IP, 모델, EEPROM boot order를 관리자 PC로 전송하게 했다.
+- `RpiBootServiceLite`는 Raspberry Pi MAC OUI에 한해 `10.73.0.180`-`10.73.0.199` 임시 discovery lease를 자동 배정한다.
+- Provision 리스너는 `http://10.73.0.10:8088/provision/report`에서 대기하고, 결과는 `D:\logs\rpi-provisioning.jsonl`에 쌓인다.
+- `새 RPi4 등록/복제` 창은 최신 provisioning report를 읽어 serial/MAC/IP를 자동 입력한다.
 - `저장소 설정`과 `저장소 열기` 버튼은 이제 `서버 PC 준비` 화면에서만 보인다.
 - SD 검증이 오래 걸리던 원인은 PowerShell 바이트 단위 비교였다. C# 버퍼 비교 helper와 `verify-image` 명령으로 수정했다.
 - Disk 3 OS SD는 이미지와 일치하는 것으로 검증 완료했다.
@@ -107,21 +111,14 @@ SHA256 43639F3D17C53D47C1E54D6B6C9229BB095014A15A93BD948717B45343EA22F7
 
 1. GUI에서 `RPi4 OS SD 작성`을 실행해 OS SD를 만든다.
 2. 새 RPi4를 그 OS SD로 부팅한다.
-3. RPi OS에서 serial/MAC을 확인한다.
-
-   ```bash
-   cat /proc/cpuinfo | grep Serial
-   cat /sys/class/net/eth0/address
-   ```
-
-4. 필요하면 OS에서 EEPROM/network boot order를 업데이트한다.
-5. GUI에서 `새 RPi4 등록/복제`를 실행한다.
-6. DHCP 예약이 바뀌면 `부팅 서비스 시작`을 다시 실행한다.
-7. SD를 제거하고 새 RPi4를 Ethernet netboot로 확인한다.
+3. 관리자가 discovery lease를 주고 OS SD가 serial/MAC/IP/EEPROM boot order를 자동 보고할 때까지 기다린다.
+4. GUI에서 `새 RPi4 등록/복제`를 실행해 자동 입력된 값을 확인하고 device id를 정한다.
+5. DHCP 예약이 바뀌면 `부팅 서비스 시작`을 다시 실행한다.
+6. SD를 제거하고 새 RPi4를 Ethernet netboot로 확인한다.
 
 ## 다음 액션
 
-1. Disk 3을 안전하게 꺼낸다.
-2. 새 RPi4를 OS SD로 부팅한다.
-3. RPi OS에서 serial/MAC과 EEPROM/network boot order를 확인한다.
+1. 기존 SD는 자동 리포터가 들어가기 전에 작성됐으므로, SD를 PC에 다시 꽂고 `RPi4 OS SD 작성`으로 다시 만든다.
+2. 새 RPi4를 갱신된 OS SD로 부팅한다.
+3. `D:\logs\rpi-provisioning.jsonl`에 report가 들어오는지 확인한다.
 4. GUI에서 `새 RPi4 등록/복제`를 진행한다.

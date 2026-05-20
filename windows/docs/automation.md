@@ -36,9 +36,11 @@ Zero 2 W Gadget SD
 2. `상태 확인`으로 현재 PC 상태 확인
 3. 문제가 있으면 `서버 PC 준비` 버튼으로 Windows 서버 PC 준비
 4. `부팅 서비스 시작` 버튼으로 RPi4 부팅 서비스 실행
-5. `새 RPi4 등록/복제`로 기기 번호, 시리얼, MAC 입력
-6. 새 RPi4 전원을 다시 넣어 네트워크 부팅 확인
-7. 필요하면 `RPi4 OS SD 작성` 또는 `Zero 2 W Gadget SD` 실행
+5. `RPi4 OS SD 작성`으로 새 Pi 첫 부팅 리포터 포함 OS SD 작성
+6. 새 RPi4를 OS SD로 부팅해 serial/MAC/IP 자동 수집
+7. `새 RPi4 등록/복제`에서 감지된 값을 확인하고 기기 번호 지정
+8. SD를 제거한 뒤 새 RPi4 전원을 다시 넣어 네트워크 부팅 확인
+9. 필요하면 `Zero 2 W Gadget SD` 실행
 
 ## 자동화된 항목
 
@@ -54,6 +56,7 @@ Zero 2 W Gadget SD
 - 내장 DHCP/TFTP 서버 `RpiBootServiceLite.exe` 빌드
 - rootfs 서비스 시작
 - 새 RPi4 bootfs/rootfs 복제와 client metadata 생성
+- Raspberry Pi MAC OUI discovery lease와 첫 부팅 provisioning report 수신
 
 ## 프로그램 작업 모드
 

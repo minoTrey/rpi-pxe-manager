@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace RpiBootServiceLite
@@ -41,12 +42,19 @@ namespace RpiBootServiceLite
             logPath = GetOption(options, "log", "");
             bool enableDhcp = options.ContainsKey("dhcp") || !options.ContainsKey("tftp-only");
             bool enableTftp = options.ContainsKey("tftp") || !options.ContainsKey("dhcp-only");
+            string discoverStartText = GetOption(options, "discover-start", "");
+            string discoverEndText = GetOption(options, "discover-end", "");
+            bool discoverRpiOnly = GetBoolOption(options, "discover-rpi-only", true);
+            int provisionPort = Int32.Parse(GetOption(options, "provision-port", "0"));
+            string provisionLog = GetOption(options, "provision-log", "");
 
             IPAddress serverIp = IPAddress.Parse(serverIpText);
             IPAddress routerIp = IPAddress.Parse(routerIpText);
             IPAddress dnsIp = IPAddress.Parse(dnsIpText);
             IPAddress subnetMask = IPAddress.Parse(subnetText);
             IPAddress broadcastIp = GetBroadcast(serverIp, subnetMask);
+            IPAddress discoverStart = String.IsNullOrWhiteSpace(discoverStartText) ? null : IPAddress.Parse(discoverStartText);
+            IPAddress discoverEnd = String.IsNullOrWhiteSpace(discoverEndText) ? null : IPAddress.Parse(discoverEndText);
             Dictionary<string, Lease> leases = LoadLeases(leasesPath);
 
             Console.CancelKeyPress += delegate(object sender, ConsoleCancelEventArgs e)
@@ -58,11 +66,15 @@ namespace RpiBootServiceLite
             Log("RPI Boot Service Lite starting");
             Log("Server=" + serverIp + " Router=" + routerIp + " DNS=" + dnsIp + " TFTP=" + tftpRoot);
             Log("Static leases=" + leases.Count);
+            if (discoverStart != null && discoverEnd != null)
+            {
+                Log("Discovery leases=" + discoverStart + "-" + discoverEnd + " rpiOnly=" + discoverRpiOnly);
+            }
 
             List<Thread> threads = new List<Thread>();
             if (enableDhcp)
             {
-                DhcpServer dhcp = new DhcpServer(leases, serverIp, routerIp, dnsIp, subnetMask, broadcastIp, bootFile, Option43, Log, IsRunning);
+                DhcpServer dhcp = new DhcpServer(leases, serverIp, routerIp, dnsIp, subnetMask, broadcastIp, bootFile, Option43, discoverStart, discoverEnd, discoverRpiOnly, Log, IsRunning);
                 Thread t = new Thread(dhcp.Run);
                 t.IsBackground = true;
                 t.Start();
@@ -73,6 +85,15 @@ namespace RpiBootServiceLite
             {
                 TftpServer tftp = new TftpServer(tftpRoot, Log, IsRunning);
                 Thread t = new Thread(tftp.Run);
+                t.IsBackground = true;
+                t.Start();
+                threads.Add(t);
+            }
+
+            if (provisionPort > 0)
+            {
+                ProvisionServer provision = new ProvisionServer(provisionPort, provisionLog, Log, IsRunning);
+                Thread t = new Thread(provision.Run);
                 t.IsBackground = true;
                 t.Start();
                 threads.Add(t);
@@ -96,6 +117,15 @@ namespace RpiBootServiceLite
         {
             string value;
             return options.TryGetValue(name, out value) ? value : fallback;
+        }
+
+        private static bool GetBoolOption(Dictionary<string, string> options, string name, bool fallback)
+        {
+            string value;
+            if (!options.TryGetValue(name, out value)) return fallback;
+            return String.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+                   String.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+                   String.Equals(value, "yes", StringComparison.OrdinalIgnoreCase);
         }
 
         private static Dictionary<string, string> ParseArgs(string[] args)
@@ -124,7 +154,7 @@ namespace RpiBootServiceLite
 
         private static void PrintUsage()
         {
-            Console.WriteLine("RpiBootServiceLite --leases leases.tsv --server 10.73.0.10 --router 10.73.0.1 --dns 10.73.0.1 --tftp D:\\tftp --dhcp");
+            Console.WriteLine("RpiBootServiceLite --leases leases.tsv --server 10.73.0.10 --router 10.73.0.1 --dns 10.73.0.1 --tftp D:\\tftp --dhcp --discover-start 10.73.0.180 --discover-end 10.73.0.199 --provision-port 8088");
         }
 
         private static Dictionary<string, Lease> LoadLeases(string path)
@@ -193,9 +223,218 @@ namespace RpiBootServiceLite
         public string Serial;
     }
 
+    internal sealed class ProvisionServer
+    {
+        private readonly int port;
+        private readonly string provisionLog;
+        private readonly Action<string> log;
+        private readonly Func<bool> isRunning;
+
+        public ProvisionServer(int port, string provisionLog, Action<string> log, Func<bool> isRunning)
+        {
+            this.port = port;
+            this.provisionLog = provisionLog ?? "";
+            this.log = log;
+            this.isRunning = isRunning;
+        }
+
+        public void Run()
+        {
+            TcpListener listener = new TcpListener(IPAddress.Any, port);
+            listener.Start();
+            log("Provisioning HTTP listening on TCP " + port);
+            while (isRunning())
+            {
+                try
+                {
+                    if (!listener.Pending())
+                    {
+                        Thread.Sleep(100);
+                        continue;
+                    }
+                    TcpClient client = listener.AcceptTcpClient();
+                    ThreadPool.QueueUserWorkItem(delegate { HandleClient(client); });
+                }
+                catch (SocketException ex)
+                {
+                    if (isRunning()) log("Provisioning socket error: " + ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    if (isRunning()) log("Provisioning error: " + ex.Message);
+                }
+            }
+            listener.Stop();
+        }
+
+        private void HandleClient(TcpClient client)
+        {
+            using (client)
+            {
+                client.ReceiveTimeout = 5000;
+                client.SendTimeout = 5000;
+                NetworkStream stream = client.GetStream();
+                byte[] request = ReadHttpRequest(stream);
+                if (request.Length == 0)
+                {
+                    return;
+                }
+
+                int headerEnd = FindHeaderEnd(request, request.Length);
+                if (headerEnd < 0)
+                {
+                    SendResponse(stream, 400, "bad request");
+                    return;
+                }
+
+                string headers = Encoding.ASCII.GetString(request, 0, headerEnd);
+                string[] lines = headers.Split(new string[] { "\r\n" }, StringSplitOptions.None);
+                string requestLine = lines.Length > 0 ? lines[0] : "";
+                string method = "";
+                string path = "";
+                string[] requestParts = requestLine.Split(' ');
+                if (requestParts.Length >= 2)
+                {
+                    method = requestParts[0];
+                    path = requestParts[1];
+                }
+
+                if (!path.StartsWith("/provision/report", StringComparison.OrdinalIgnoreCase))
+                {
+                    SendResponse(stream, 404, "not found");
+                    return;
+                }
+
+                if (!String.Equals(method, "POST", StringComparison.OrdinalIgnoreCase))
+                {
+                    SendResponse(stream, 200, "ok");
+                    return;
+                }
+
+                int contentLength = ParseContentLength(lines);
+                int bodyOffset = headerEnd + 4;
+                int bodyLength = Math.Max(0, Math.Min(contentLength, request.Length - bodyOffset));
+                string body = Encoding.UTF8.GetString(request, bodyOffset, bodyLength).Trim();
+                if (body.Length == 0) body = "{}";
+                string stored = AddReceivedAt(body);
+
+                if (provisionLog.Length > 0)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(provisionLog));
+                    File.AppendAllText(provisionLog, stored + Environment.NewLine, Encoding.UTF8);
+                }
+
+                string serial = ExtractJsonField(body, "serial");
+                string mac = ExtractJsonField(body, "mac");
+                string ip = ExtractJsonField(body, "ip");
+                string model = ExtractJsonField(body, "model");
+                string bootOrder = ExtractJsonField(body, "boot_order");
+                log("PROVISION serial=" + ValueOrDash(serial) + " mac=" + ValueOrDash(mac) + " ip=" + ValueOrDash(ip) + " model=" + ValueOrDash(model) + " boot_order=" + ValueOrDash(bootOrder));
+                SendResponse(stream, 200, "ok");
+            }
+        }
+
+        private static byte[] ReadHttpRequest(NetworkStream stream)
+        {
+            MemoryStream memory = new MemoryStream();
+            byte[] buffer = new byte[4096];
+            int headerEnd = -1;
+            int contentLength = 0;
+            while (memory.Length < 1048576)
+            {
+                int read = stream.Read(buffer, 0, buffer.Length);
+                if (read <= 0) break;
+                memory.Write(buffer, 0, read);
+                byte[] data = memory.ToArray();
+                if (headerEnd < 0)
+                {
+                    headerEnd = FindHeaderEnd(data, data.Length);
+                    if (headerEnd >= 0)
+                    {
+                        string headers = Encoding.ASCII.GetString(data, 0, headerEnd);
+                        contentLength = ParseContentLength(headers.Split(new string[] { "\r\n" }, StringSplitOptions.None));
+                    }
+                }
+                if (headerEnd >= 0 && data.Length >= headerEnd + 4 + contentLength)
+                {
+                    return data;
+                }
+            }
+            return memory.ToArray();
+        }
+
+        private static int FindHeaderEnd(byte[] data, int count)
+        {
+            for (int i = 0; i + 3 < count; i++)
+            {
+                if (data[i] == 13 && data[i + 1] == 10 && data[i + 2] == 13 && data[i + 3] == 10)
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private static int ParseContentLength(string[] lines)
+        {
+            foreach (string line in lines)
+            {
+                int colon = line.IndexOf(':');
+                if (colon < 0) continue;
+                string name = line.Substring(0, colon).Trim();
+                if (!String.Equals(name, "Content-Length", StringComparison.OrdinalIgnoreCase)) continue;
+                int value;
+                if (Int32.TryParse(line.Substring(colon + 1).Trim(), out value)) return value;
+            }
+            return 0;
+        }
+
+        private static string AddReceivedAt(string body)
+        {
+            string ts = DateTime.Now.ToString("o");
+            if (body.StartsWith("{") && body.EndsWith("}"))
+            {
+                string inner = body.Substring(1, body.Length - 2).Trim();
+                if (inner.Length == 0) return "{\"received_at\":\"" + JsonEscape(ts) + "\"}";
+                return "{\"received_at\":\"" + JsonEscape(ts) + "\"," + inner + "}";
+            }
+            return "{\"received_at\":\"" + JsonEscape(ts) + "\",\"raw\":\"" + JsonEscape(body) + "\"}";
+        }
+
+        private static string ExtractJsonField(string json, string name)
+        {
+            Match match = Regex.Match(json, "\"" + Regex.Escape(name) + "\"\\s*:\\s*\"([^\"]*)\"", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value : "";
+        }
+
+        private static string JsonEscape(string value)
+        {
+            return (value ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
+        }
+
+        private static string ValueOrDash(string value)
+        {
+            return String.IsNullOrWhiteSpace(value) ? "-" : value;
+        }
+
+        private static void SendResponse(NetworkStream stream, int status, string body)
+        {
+            string reason = status == 200 ? "OK" : status == 404 ? "Not Found" : "Bad Request";
+            byte[] payload = Encoding.UTF8.GetBytes(body + "\n");
+            string headers = "HTTP/1.1 " + status + " " + reason + "\r\n" +
+                             "Content-Type: text/plain; charset=utf-8\r\n" +
+                             "Content-Length: " + payload.Length + "\r\n" +
+                             "Connection: close\r\n\r\n";
+            byte[] headerBytes = Encoding.ASCII.GetBytes(headers);
+            stream.Write(headerBytes, 0, headerBytes.Length);
+            stream.Write(payload, 0, payload.Length);
+        }
+    }
+
     internal sealed class DhcpServer
     {
         private readonly Dictionary<string, Lease> leases;
+        private readonly object leaseLock = new object();
         private readonly IPAddress serverIp;
         private readonly IPAddress routerIp;
         private readonly IPAddress dnsIp;
@@ -203,10 +442,22 @@ namespace RpiBootServiceLite
         private readonly IPAddress broadcastIp;
         private readonly string bootFile;
         private readonly byte[] option43;
+        private readonly IPAddress discoverStart;
+        private readonly IPAddress discoverEnd;
+        private readonly bool discoverRpiOnly;
         private readonly Action<string> log;
         private readonly Func<bool> isRunning;
+        private static readonly string[] RaspberryPiPrefixes = new string[]
+        {
+            "b827eb",
+            "d83add",
+            "dca632",
+            "e45f01",
+            "88a29e",
+            "2ccf67"
+        };
 
-        public DhcpServer(Dictionary<string, Lease> leases, IPAddress serverIp, IPAddress routerIp, IPAddress dnsIp, IPAddress subnetMask, IPAddress broadcastIp, string bootFile, byte[] option43, Action<string> log, Func<bool> isRunning)
+        public DhcpServer(Dictionary<string, Lease> leases, IPAddress serverIp, IPAddress routerIp, IPAddress dnsIp, IPAddress subnetMask, IPAddress broadcastIp, string bootFile, byte[] option43, IPAddress discoverStart, IPAddress discoverEnd, bool discoverRpiOnly, Action<string> log, Func<bool> isRunning)
         {
             this.leases = leases;
             this.serverIp = serverIp;
@@ -216,6 +467,9 @@ namespace RpiBootServiceLite
             this.broadcastIp = broadcastIp;
             this.bootFile = bootFile ?? "";
             this.option43 = option43;
+            this.discoverStart = discoverStart;
+            this.discoverEnd = discoverEnd;
+            this.discoverRpiOnly = discoverRpiOnly;
             this.log = log;
             this.isRunning = isRunning;
         }
@@ -259,16 +513,100 @@ namespace RpiBootServiceLite
             if (msgType != 1 && msgType != 3) return;
 
             Lease lease;
-            if (!leases.TryGetValue(mac, out lease))
+            lock (leaseLock)
             {
-                log("DHCP ignored unknown MAC " + mac);
-                return;
+                leases.TryGetValue(mac, out lease);
+            }
+            if (lease == null)
+            {
+                lease = TryCreateDiscoveryLease(mac);
+                if (lease == null)
+                {
+                    log("DHCP ignored unknown MAC " + mac);
+                    return;
+                }
             }
 
             int replyType = msgType == 1 ? 2 : 5;
             byte[] response = BuildResponse(request, lease, replyType);
             udp.Send(response, response.Length, new IPEndPoint(IPAddress.Broadcast, 68));
             log("DHCP " + (replyType == 2 ? "OFFER " : "ACK ") + mac + " -> " + lease.Ip);
+        }
+
+        private Lease TryCreateDiscoveryLease(string mac)
+        {
+            if (discoverStart == null || discoverEnd == null)
+            {
+                return null;
+            }
+            if (discoverRpiOnly && !IsRaspberryPiMac(mac))
+            {
+                return null;
+            }
+
+            lock (leaseLock)
+            {
+                Lease existing;
+                if (leases.TryGetValue(mac, out existing)) return existing;
+
+                uint start = ToUInt32(discoverStart);
+                uint end = ToUInt32(discoverEnd);
+                if (end < start) return null;
+                for (uint value = start; value <= end; value++)
+                {
+                    IPAddress candidate = FromUInt32(value);
+                    if (IsIpInUse(candidate)) continue;
+                    string compact = mac.Replace(":", "");
+                    Lease lease = new Lease();
+                    lease.Mac = mac;
+                    lease.Ip = candidate;
+                    lease.Hostname = "rpi-discover-" + compact.Substring(Math.Max(0, compact.Length - 6));
+                    lease.Serial = "";
+                    leases[mac] = lease;
+                    log("DHCP discovery lease " + mac + " -> " + lease.Ip + " hostname=" + lease.Hostname);
+                    return lease;
+                }
+            }
+            log("DHCP discovery pool exhausted for " + mac);
+            return null;
+        }
+
+        private bool IsIpInUse(IPAddress ip)
+        {
+            foreach (Lease lease in leases.Values)
+            {
+                if (lease.Ip.Equals(ip)) return true;
+            }
+            return false;
+        }
+
+        private static bool IsRaspberryPiMac(string mac)
+        {
+            string compact = mac.Replace(":", "").Replace("-", "").ToLowerInvariant();
+            if (compact.Length < 6) return false;
+            string prefix = compact.Substring(0, 6);
+            foreach (string item in RaspberryPiPrefixes)
+            {
+                if (String.Equals(prefix, item, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
+        private static uint ToUInt32(IPAddress ip)
+        {
+            byte[] bytes = ip.GetAddressBytes();
+            return ((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) | ((uint)bytes[2] << 8) | bytes[3];
+        }
+
+        private static IPAddress FromUInt32(uint value)
+        {
+            return new IPAddress(new byte[]
+            {
+                (byte)((value >> 24) & 255),
+                (byte)((value >> 16) & 255),
+                (byte)((value >> 8) & 255),
+                (byte)(value & 255)
+            });
         }
 
         private static string ReadMac(byte[] request, int hlen)

@@ -352,6 +352,13 @@ function Show-Status {
         } else {
             Write-Check "필요" "TFTP UDP 69" "아직 대기 중인 서비스가 없습니다. TFTP 서버 설치/설정이 필요합니다."
         }
+        $provisionListeners = @(Get-TcpListeners 8088)
+        if ($provisionListeners.Count -gt 0) {
+            $addresses = @($provisionListeners | ForEach-Object { $_.LocalAddress }) -join ", "
+            Write-Check "정상" "Provision TCP 8088" "OS SD 첫 부팅 리포트 수신 대기 중입니다. 주소: $addresses"
+        } else {
+            Write-Check "필요" "Provision TCP 8088" "새 RPi 시리얼/MAC 자동 수집 리스너가 대기 중이 아닙니다. '부팅 서비스 시작'을 누르세요."
+        }
         $nfsListeners = @(Get-TcpListeners 2049)
         if ($nfsListeners.Count -gt 0) {
             $addresses = @($nfsListeners | ForEach-Object { $_.LocalAddress }) -join ", "
@@ -434,8 +441,9 @@ function Show-Status {
         Write-Output "1. 상태 확인으로 저장소와 네트워크를 확인"
         Write-Output "2. 서버 PC 준비로 이더넷과 기본 폴더를 맞춤"
         Write-Output "3. 부팅 서비스 시작"
-        Write-Output "4. 새 RPi4 등록/복제로 기기 번호, 시리얼, MAC 입력"
-        Write-Output "5. 새 RPi4 전원을 다시 넣어 네트워크 부팅 확인"
+        Write-Output "4. RPi4 OS SD 작성 후 새 Pi를 SD로 부팅해 시리얼/MAC 자동 수집"
+        Write-Output "5. 새 RPi4 등록/복제에서 감지된 값 확인 후 등록"
+        Write-Output "6. SD를 제거하고 새 RPi4 전원을 다시 넣어 네트워크 부팅 확인"
     }
 }
 
@@ -511,7 +519,7 @@ function Invoke-PrepareRpi4OsSd {
     Invoke-Step "List disks before writing SD" {
         Invoke-Tool "tools\rpi-sd-card.ps1" @("list", "-CacheDir", $cache)
     }
-    if (-not (Confirm-Destructive "This will erase the selected SD target $targetText and write Raspberry Pi OS Lite 64-bit Trixie 2026-04-21. Use this OS SD to boot the Pi, confirm serial/MAC, and handle EEPROM/network-boot settings from the OS.")) {
+    if (-not (Confirm-Destructive "This will erase the selected SD target $targetText and write Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 with the first-boot provisioning reporter. Use this OS SD to boot the Pi so the manager can collect serial/MAC/EEPROM boot order automatically.")) {
         Write-Host "Cancelled."
         return
     }

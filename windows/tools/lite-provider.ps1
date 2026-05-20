@@ -65,6 +65,7 @@ $NfsDir = Join-Path $ToolsRoot "winnfsd"
 $NfsExe = Join-Path $NfsDir "WinNFSd.exe"
 $NfsExports = Join-Path $ConfigDir "winnfsd-paths.txt"
 $LitePidPath = Join-Path $RunDir "rpi-boot-lite.pid"
+$LegacyLitePidPath = Join-Path $RunDir "lite.pid"
 $NfsPidPath = Join-Path $RunDir "winnfsd.pid"
 $WinNfsdUrl = "https://github.com/winnfsd/winnfsd/releases/download/2.4.0/WinNFSd.exe"
 
@@ -250,21 +251,23 @@ function Get-PortOwnerSummary {
 function Add-FirewallRules {
     New-NetFirewallRule -DisplayName "RPI Netboot DHCP" -Direction Inbound -Protocol UDP -LocalPort 67,68 -Action Allow -ErrorAction SilentlyContinue | Out-Null
     New-NetFirewallRule -DisplayName "RPI Netboot TFTP" -Direction Inbound -Protocol UDP -LocalPort 69 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    New-NetFirewallRule -DisplayName "RPI Netboot Provisioning" -Direction Inbound -Protocol TCP -LocalPort 8088 -Action Allow -ErrorAction SilentlyContinue | Out-Null
     New-NetFirewallRule -DisplayName "RPI Netboot NFS TCP" -Direction Inbound -Protocol TCP -LocalPort 111,2049 -Action Allow -ErrorAction SilentlyContinue | Out-Null
     New-NetFirewallRule -DisplayName "RPI Netboot NFS UDP" -Direction Inbound -Protocol UDP -LocalPort 111,2049 -Action Allow -ErrorAction SilentlyContinue | Out-Null
-    Write-Check "정상" "방화벽" "DHCP/TFTP/NFS 규칙 확인"
+    Write-Check "정상" "방화벽" "DHCP/TFTP/Provisioning/NFS 규칙 확인"
 }
 
 function Start-LiteProvider {
     Assert-Admin
     $cfg = Read-ConfigObject
     Ensure-Directories
+    Stop-ProcessFromPidFile $LitePidPath "RpiBootServiceLite"
+    Stop-ProcessFromPidFile $LegacyLitePidPath "RpiBootServiceLite"
+    Stop-ProcessFromPidFile $NfsPidPath "rootfs 서비스"
     Build-LiteService
     Save-WinNfsd
     Write-ProviderFiles
 
-    Stop-ProcessFromPidFile $LitePidPath "RpiBootServiceLite"
-    Stop-ProcessFromPidFile $NfsPidPath "rootfs 서비스"
     Stop-HaneWinServices
     Add-FirewallRules
 
@@ -282,6 +285,10 @@ function Start-LiteProvider {
     $tftpRoot = [string]$cfg.tftp_root
     $rootfsRoot = [string]$cfg.nfs_root
     $subnetMask = [string]$cfg.subnet_mask
+    $discoverStart = if ($cfg.discovery_start) { [string]$cfg.discovery_start } else { "10.73.0.180" }
+    $discoverEnd = if ($cfg.discovery_end) { [string]$cfg.discovery_end } elseif ($cfg.dhcp_end) { [string]$cfg.dhcp_end } else { "10.73.0.199" }
+    $provisionPort = if ($cfg.provision_port) { [int]$cfg.provision_port } else { 8088 }
+    $provisionLog = Join-Path $LogDir "rpi-provisioning.jsonl"
 
     $liteStdout = Join-Path $LogDir "rpi-boot-lite.stdout.log"
     $liteStderr = Join-Path $LogDir "rpi-boot-lite.stderr.log"
@@ -294,11 +301,17 @@ function Start-LiteProvider {
         "--subnet", $subnetMask,
         "--tftp", $tftpRoot,
         "--log", (Join-Path $LogDir "rpi-boot-lite.log"),
-        "--dhcp"
+        "--dhcp",
+        "--discover-start", $discoverStart,
+        "--discover-end", $discoverEnd,
+        "--discover-rpi-only", "true",
+        "--provision-port", ([string]$provisionPort),
+        "--provision-log", $provisionLog
     )
     $lite = Start-Process -FilePath $LiteExe -ArgumentList $liteArgs -WorkingDirectory $ProjectRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput $liteStdout -RedirectStandardError $liteStderr
     Set-Content -LiteralPath $LitePidPath -Value $lite.Id -Encoding ASCII
-    Write-Check "정상" "내장 DHCP/TFTP" "시작됨 PID $($lite.Id), DHCP UDP 67 / TFTP UDP 69"
+    Set-Content -LiteralPath $LegacyLitePidPath -Value $lite.Id -Encoding ASCII
+    Write-Check "정상" "내장 DHCP/TFTP/Provisioning" "시작됨 PID $($lite.Id), DHCP UDP 67 / TFTP UDP 69 / Provision TCP $provisionPort, discovery $discoverStart-$discoverEnd"
 
     if (Test-Path -LiteralPath $NfsExe) {
         $nfsStdout = Join-Path $LogDir "winnfsd.stdout.log"
@@ -348,12 +361,14 @@ function Show-LiteStatus {
 
     $udp67 = @(Get-NetUDPEndpoint -LocalPort 67 -ErrorAction SilentlyContinue)
     $udp69 = @(Get-NetUDPEndpoint -LocalPort 69 -ErrorAction SilentlyContinue)
+    $tcp8088 = @(Get-NetTCPConnection -LocalPort 8088 -ErrorAction SilentlyContinue)
     $portmapTcp = @(Get-NetTCPConnection -LocalPort 111 -ErrorAction SilentlyContinue)
     $portmapUdp = @(Get-NetUDPEndpoint -LocalPort 111 -ErrorAction SilentlyContinue)
     $tcp2049 = @(Get-NetTCPConnection -LocalPort 2049 -ErrorAction SilentlyContinue)
 
     if ($udp67.Count -gt 0) { Write-Check "정상" "DHCP UDP 67" (($udp67 | ForEach-Object { $_.LocalAddress }) -join ", ") } else { Write-Check "필요" "DHCP UDP 67" "대기 중 아님" }
     if ($udp69.Count -gt 0) { Write-Check "정상" "TFTP UDP 69" (($udp69 | ForEach-Object { $_.LocalAddress }) -join ", ") } else { Write-Check "필요" "TFTP UDP 69" "대기 중 아님" }
+    if ($tcp8088.Count -gt 0) { Write-Check "정상" "Provision TCP 8088" (($tcp8088 | ForEach-Object { $_.LocalAddress }) -join ", ") } else { Write-Check "필요" "Provision TCP 8088" "대기 중 아님" }
     if (($portmapTcp.Count + $portmapUdp.Count) -gt 0) { Write-Check "정상" "NFS Portmap 111" ((Get-PortOwnerSummary -TcpPorts @(111) -UdpPorts @(111)) -join "; ") } else { Write-Check "필요" "NFS Portmap 111" "대기 중 아님" }
     if ($tcp2049.Count -gt 0) { Write-Check "정상" "NFS TCP 2049" (($tcp2049 | ForEach-Object { $_.LocalAddress }) -join ", ") } else { Write-Check "필요" "NFS TCP 2049" "대기 중 아님" }
 
@@ -413,6 +428,7 @@ switch ($Command) {
     "stop" {
         Assert-Admin
         Stop-ProcessFromPidFile $LitePidPath "RpiBootServiceLite"
+        Stop-ProcessFromPidFile $LegacyLitePidPath "RpiBootServiceLite"
         Stop-ProcessFromPidFile $NfsPidPath "rootfs 서비스"
         Show-LiteStatus
     }
