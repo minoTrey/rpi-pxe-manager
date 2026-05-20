@@ -23,7 +23,7 @@ Windows판은 Raspberry Pi 4만 네트워크 부팅 대상으로 다룹니다. R
 
 ```text
 cd windows
-RPI-Netboot-Manager.bat
+RPI-Netboot-Manager.exe
 ```
 
 관리자 권한이 필요한 서버 설정, 부팅 서비스 시작, SD카드 쓰기는 Windows판 GUI에서 관리자 실행을 안내합니다.

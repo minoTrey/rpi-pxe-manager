@@ -17,40 +17,31 @@ Codex는 자동화 프로그램과 구조를 만든다.
 RPI-Netboot-Manager.exe
 ```
 
-일반 상태 확인과 문서 확인은 이 파일로 바로 실행합니다. 서버 설정, SD카드 쓰기, 방화벽처럼 관리자 권한이 필요한 버튼을 누르면 관리자 모드로 다시 열도록 안내합니다.
-
-관리자 모드가 바로 필요하면 아래 파일을 실행합니다.
-
-```text
-RPI-Netboot-Manager-Admin.exe
-```
+일반 상태 확인과 문서 확인은 이 파일로 바로 실행합니다. 서버 설정, SD카드 쓰기, 방화벽처럼 관리자 권한이 필요한 버튼을 누르면 같은 실행파일이 관리자 권한으로 다시 열립니다.
 
 ## 처음 사용하는 순서
 
 ```text
 1. 상태 확인
-2. 서버 PC 자동 준비
-3. 무료 부팅 서비스 시작
-4. SD카드에 EEPROM 쓰기
-5. 첫 Pi 부팅파일 복사
-6. 전체 상태 다시 확인
+2. 서버 PC 준비
+3. 부팅 서비스 시작
+4. 새 RPi4 등록/복제
+5. RPi4 EEPROM SD
+6. Zero 2 W Gadget SD
+7. 도움말
 ```
 
-현재 기본 테스트 provider는 `무료 부팅 서비스 시작`입니다. 이 버튼은 프로젝트 안의 작은 DHCP/TFTP 서버를 빌드하고, 무료 WinNFSd로 `D:\rootfs`를 `/rpi`로 공유합니다.
-
-`haneWIN 평가판 설치` 버튼은 빠른 비교/검증용 provider입니다. haneWIN은 실제 제품이고 미등록 상태에서 30일 평가판으로 동작하므로, 장기 운영 기본 솔루션처럼 보거나 문서화하지 않습니다.
-
-아직 실제 Pi 네트워크 부팅까지는 첫 Pi의 boot files와 rootfs를 채워야 합니다. GUI는 현재 PC/저장소/서비스 준비와 검증을 우선 자동화합니다.
+첫 RPi4는 네트워크 부팅 성공 상태까지 검증되었습니다. 새 장비는 `새 RPi4 등록/복제` 흐름으로 bootfs/rootfs와 내부 설정을 만듭니다.
 
 ## 현재 운영 기준
 
 ```text
 서버 PC 이더넷: 10.73.0.10/24
 ipTIME/router:  10.73.0.1
-저장소 드라이브: rpi (D:)
-TFTP root:      D:\tftp
-rootfs root:    D:\rootfs
-downloads:      D:\downloads
+저장소 루트:     GUI의 저장소 설정에서 선택
+TFTP root:      <저장소>\tftp
+rootfs root:    <저장소>\rootfs
+downloads:      <저장소>\downloads
 SD 카드:        S:
 ```
 
@@ -58,18 +49,12 @@ SD 카드:        S:
 
 ```text
 상태 확인
-서버 PC 자동 준비
-무료 부팅 서비스 시작
-무료 부팅 서비스 중지
-haneWIN 평가판 설치
-haneWIN 설정 적용
-SD카드에 EEPROM 쓰기
-첫 Pi 부팅파일 복사
-전체 상태 다시 확인
-TFTP 파일 복사/검증
-부팅 포트 방화벽 열기
-이더넷을 DHCP로 복구
-도움말 문서 열기
+서버 PC 준비
+부팅 서비스 시작
+새 RPi4 등록/복제
+RPi4 EEPROM SD
+Zero 2 W Gadget SD
+도움말
 ```
 
 ## 문서
@@ -85,4 +70,4 @@ TFTP 파일 복사/검증
 - `docs\sd-card-prep.md`: SD 카드 준비 프로그램
 - `docs\rpi4-netboot-manager.md`: 첫 Pi 네트워크 부팅 절차
 - `docs\system-scorecard.md`: 준비도와 리스크
-- `docs\windows-service-providers.md`: haneWIN/오픈소스/Windows Server provider 비교
+- `docs\windows-service-providers.md`: provider 비교와 진단 기록

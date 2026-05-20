@@ -43,7 +43,7 @@ D:\tools\rpi-netboot\linux-nfs-provider
 더블클릭용:
 
 ```text
-windows\RPI-Netboot-LinuxNFS-Prepare.bat
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\linux-nfs-provider.ps1 prepare -Config .\windows\lab-10.73.json -Serial d80c0b88 -LinuxServerIp 10.73.0.20
 ```
 
 ## Linux VM 쪽 준비
@@ -75,7 +75,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\linux-nfs-pr
 더블클릭용:
 
 ```text
-windows\RPI-Netboot-LinuxNFS-Start-Attempt.bat
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\tools\linux-nfs-provider.ps1 start-attempt -Config .\windows\lab-10.73.json -Serial d80c0b88 -LinuxServerIp 10.73.0.20
 ```
 
 그 다음 SD 없는 RPi4 전원을 완전히 뺐다가 다시 넣습니다.

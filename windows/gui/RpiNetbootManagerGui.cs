@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.IO;
 using System.Security.Principal;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace RpiNetbootWindowsGui
@@ -51,6 +53,47 @@ namespace RpiNetbootWindowsGui
         }
     }
 
+    internal static class UiFonts
+    {
+        public static readonly string Family = Resolve();
+
+        private static string Resolve()
+        {
+            string[] preferred = new string[]
+            {
+                "Pretendard",
+                "Noto Sans KR",
+                "Noto Sans CJK KR",
+                "맑은 고딕",
+                "Malgun Gothic",
+                "Segoe UI Variable Text",
+                "Segoe UI"
+            };
+
+            try
+            {
+                using (var installed = new InstalledFontCollection())
+                {
+                    foreach (string name in preferred)
+                    {
+                        foreach (FontFamily family in installed.Families)
+                        {
+                            if (string.Equals(family.Name, name, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return family.Name;
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return "Malgun Gothic";
+        }
+    }
+
     internal sealed class MainForm : Form
     {
         private readonly string projectRoot;
@@ -67,6 +110,7 @@ namespace RpiNetbootWindowsGui
         private TextBox helpBody;
         private TextBox taskTextBox;
         private TextBox logBox;
+        private Label storageMetricValue;
         private Button primaryButton;
         private Button secondaryButton;
         private ToolTip tips;
@@ -76,15 +120,17 @@ namespace RpiNetbootWindowsGui
         private CloneRpi4Request pendingCloneRequest;
         private readonly bool autoRunInitialTask;
 
-        private readonly Color bg = Color.FromArgb(245, 247, 248);
-        private readonly Color ink = Color.FromArgb(26, 33, 30);
-        private readonly Color muted = Color.FromArgb(95, 106, 101);
-        private readonly Color sidebarBg = Color.FromArgb(24, 34, 31);
-        private readonly Color sidebarMuted = Color.FromArgb(166, 177, 171);
-        private readonly Color teal = Color.FromArgb(15, 118, 110);
-        private readonly Color tealSoft = Color.FromArgb(220, 244, 239);
-        private readonly Color amber = Color.FromArgb(190, 120, 32);
-        private readonly Color cardBorder = Color.FromArgb(218, 224, 218);
+        private static readonly string UiFont = UiFonts.Family;
+        private readonly Color bg = Color.FromArgb(246, 248, 250);
+        private readonly Color ink = Color.FromArgb(24, 31, 38);
+        private readonly Color muted = Color.FromArgb(88, 99, 111);
+        private readonly Color sidebarBg = Color.FromArgb(255, 255, 255);
+        private readonly Color sidebarMuted = Color.FromArgb(105, 116, 128);
+        private readonly Color teal = Color.FromArgb(0, 103, 92);
+        private readonly Color tealSoft = Color.FromArgb(222, 242, 238);
+        private readonly Color amber = Color.FromArgb(168, 88, 20);
+        private readonly Color cardBorder = Color.FromArgb(221, 227, 234);
+        private readonly Color buttonSoft = Color.FromArgb(239, 243, 247);
 
         public MainForm(string initialTask, bool autoRun)
         {
@@ -95,10 +141,10 @@ namespace RpiNetbootWindowsGui
             Text = "RPI 네트워크 부팅 관리자";
             AutoScaleMode = AutoScaleMode.Dpi;
             AutoScaleDimensions = new SizeF(96f, 96f);
-            MinimumSize = new Size(1120, 760);
+            MinimumSize = new Size(1160, 760);
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = bg;
-            Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            Font = new Font(UiFont, 9.2f, FontStyle.Regular);
             Icon = LoadAppIcon();
             tips = new ToolTip();
             tips.AutoPopDelay = 12000;
@@ -108,6 +154,7 @@ namespace RpiNetbootWindowsGui
             BuildActions();
             BuildUi();
             SelectTask(FindAction(initialTask) == null ? "status" : initialTask);
+            Shown += delegate { FocusSelectedNav(); };
             if (autoRunInitialTask)
             {
                 BeginInvoke(new Action(RunSelectedTask));
@@ -127,7 +174,7 @@ namespace RpiNetbootWindowsGui
         private void BuildActions()
         {
             actions.Add(new ActionDefinition("status", "상태 확인", "RPi4 네트워크 부팅 상태를 읽기 전용으로 확인합니다.", IconKind.Pulse, false));
-            actions.Add(new ActionDefinition("server-setup", "서버 PC 준비", "D: 저장소와 이더넷 10.73.0.10 구성을 자동으로 맞춥니다.", IconKind.Server, true));
+            actions.Add(new ActionDefinition("server-setup", "서버 PC 준비", "선택한 저장소와 이더넷 10.73.0.10 구성을 자동으로 맞춥니다.", IconKind.Server, true));
             actions.Add(new ActionDefinition("lite-provider-start", "부팅 서비스 시작", "DHCP, TFTP, NFS 서비스를 시작해 RPi4 네트워크 부팅을 받을 준비를 합니다.", IconKind.Network, true));
             actions.Add(new ActionDefinition("clone-rpi4", "새 RPi4 등록/복제", "기기 번호, 시리얼, MAC을 입력해 새 RPi4의 bootfs/rootfs와 내부 설정을 만듭니다.", IconKind.Package, false));
             actions.Add(new ActionDefinition("prepare-sd", "RPi4 EEPROM SD", "S: SD카드에 RPi4 Network Boot EEPROM 이미지를 씁니다.", IconKind.SdCard, true, true));
@@ -140,7 +187,7 @@ namespace RpiNetbootWindowsGui
             var root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
             root.ColumnCount = 2;
-            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 306));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 276));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             root.RowCount = 1;
             Controls.Add(root);
@@ -148,7 +195,7 @@ namespace RpiNetbootWindowsGui
             sidebar = new Panel();
             sidebar.Dock = DockStyle.Fill;
             sidebar.BackColor = sidebarBg;
-            sidebar.Padding = new Padding(22, 22, 18, 18);
+            sidebar.Padding = new Padding(18, 22, 14, 18);
             root.Controls.Add(sidebar, 0, 0);
 
             BuildSidebar();
@@ -156,7 +203,7 @@ namespace RpiNetbootWindowsGui
             main = new Panel();
             main.Dock = DockStyle.Fill;
             main.BackColor = bg;
-            main.Padding = new Padding(28);
+            main.Padding = new Padding(22);
             root.Controls.Add(main, 1, 0);
 
             BuildMain();
@@ -166,34 +213,32 @@ namespace RpiNetbootWindowsGui
         {
             var layout = new TableLayoutPanel();
             layout.Dock = DockStyle.Fill;
-            layout.RowCount = 4;
+            layout.RowCount = 2;
             layout.ColumnCount = 1;
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 136));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
             sidebar.Controls.Add(layout);
 
             var brand = new Panel { Dock = DockStyle.Fill };
             brand.Paint += delegate(object sender, PaintEventArgs e)
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                DrawAppMark(e.Graphics, new Rectangle(2, 5, 48, 48));
+                DrawAppMark(e.Graphics, new Rectangle(0, 4, 42, 42));
             };
 
             var title = new Label();
             title.Text = "RPI Netboot";
-            title.ForeColor = Color.White;
-            title.Font = new Font("Segoe UI Semibold", 18f, FontStyle.Bold);
-            title.Location = new Point(62, 4);
+            title.ForeColor = ink;
+            title.Font = new Font(UiFont, 15.0f, FontStyle.Bold);
+            title.Location = new Point(54, 2);
             title.AutoSize = true;
             brand.Controls.Add(title);
 
             var sub = new Label();
-            sub.Text = "Windows 서버 자동화";
+            sub.Text = "네트워크 부팅 관리자";
             sub.ForeColor = sidebarMuted;
-            sub.Font = new Font("Segoe UI", 9.5f);
-            sub.Location = new Point(64, 39);
+            sub.Font = new Font(UiFont, 8.8f, FontStyle.Regular);
+            sub.Location = new Point(56, 33);
             sub.AutoSize = true;
             brand.Controls.Add(sub);
             layout.Controls.Add(brand, 0, 0);
@@ -210,9 +255,9 @@ namespace RpiNetbootWindowsGui
             foreach (ActionDefinition action in actions)
             {
                 var button = new NavButton();
-                button.Width = 246;
-                button.Height = 54;
-                button.Margin = new Padding(0, 0, 0, 8);
+                button.Width = 236;
+                button.Height = 46;
+                button.Margin = new Padding(0, 0, 0, 5);
                 button.Text = action.Title;
                 button.Icon = action.Icon;
                 button.Tag = action.Task;
@@ -226,38 +271,9 @@ namespace RpiNetbootWindowsGui
             {
                 foreach (Control child in navList.Controls)
                 {
-                    child.Width = Math.Max(218, navList.ClientSize.Width - 8);
+                    child.Width = Math.Max(210, navList.ClientSize.Width - 6);
                 }
             };
-
-            var info = new SoftPanel();
-            info.Dock = DockStyle.Fill;
-            info.Padding = new Padding(14);
-            info.FillColor = Color.FromArgb(36, 48, 44);
-            info.BorderColor = Color.FromArgb(56, 70, 65);
-            layout.Controls.Add(info, 0, 2);
-
-            var infoTitle = new Label();
-            infoTitle.Text = "권장 순서";
-            infoTitle.ForeColor = Color.White;
-            infoTitle.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
-            infoTitle.Dock = DockStyle.Top;
-            infoTitle.Height = 22;
-            info.Controls.Add(infoTitle);
-
-            var infoText = new Label();
-            infoText.Text = "1 상태 확인\n2 서버 PC 준비\n3 부팅 서비스 시작\n4 새 RPi4 등록/복제\n5 전원 재인가";
-            infoText.ForeColor = sidebarMuted;
-            infoText.Font = new Font("Segoe UI", 9.2f);
-            infoText.Dock = DockStyle.Fill;
-            info.Controls.Add(infoText);
-
-            var version = new Label();
-            version.Text = "자동화 UI 빌드";
-            version.ForeColor = Color.FromArgb(128, 141, 134);
-            version.TextAlign = ContentAlignment.BottomLeft;
-            version.Dock = DockStyle.Fill;
-            layout.Controls.Add(version, 0, 3);
         }
 
         private void BuildMain()
@@ -266,12 +282,12 @@ namespace RpiNetbootWindowsGui
             layout.Dock = DockStyle.Fill;
             layout.ColumnCount = 2;
             layout.RowCount = 4;
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 64));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 132));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 86));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 190));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 168));
             main.Controls.Add(layout);
 
             var header = new TableLayoutPanel();
@@ -280,7 +296,7 @@ namespace RpiNetbootWindowsGui
             header.ColumnCount = 2;
             header.RowCount = 1;
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 146));
             layout.Controls.Add(header, 0, 0);
             layout.SetColumnSpan(header, 2);
 
@@ -290,16 +306,16 @@ namespace RpiNetbootWindowsGui
             pageTitle = new Label();
             pageTitle.Text = "상태 확인";
             pageTitle.ForeColor = ink;
-            pageTitle.Font = new Font("Segoe UI Semibold", 24f, FontStyle.Bold);
+            pageTitle.Font = new Font(UiFont, 18.0f, FontStyle.Bold);
             pageTitle.Dock = DockStyle.Top;
-            pageTitle.Height = 50;
+            pageTitle.Height = 38;
             pageTitle.AutoEllipsis = true;
             headerText.Controls.Add(pageTitle);
 
             pageSubtitle = new Label();
             pageSubtitle.Text = "현재 서버 PC와 Raspberry Pi 네트워크 부팅 준비 상태를 확인합니다.";
             pageSubtitle.ForeColor = muted;
-            pageSubtitle.Font = new Font("Segoe UI", 10.5f);
+            pageSubtitle.Font = new Font(UiFont, 9.1f);
             pageSubtitle.Dock = DockStyle.Fill;
             pageSubtitle.AutoSize = false;
             pageSubtitle.AutoEllipsis = true;
@@ -311,11 +327,11 @@ namespace RpiNetbootWindowsGui
             statusLabel.Text = "대기 중";
             statusLabel.ForeColor = teal;
             statusLabel.BackColor = tealSoft;
-            statusLabel.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+            statusLabel.Font = new Font(UiFont, 8.7f, FontStyle.Bold);
             statusLabel.TextAlign = ContentAlignment.MiddleCenter;
             statusLabel.Dock = DockStyle.Top;
-            statusLabel.Height = 40;
-            statusLabel.Margin = new Padding(0, 8, 0, 0);
+            statusLabel.Height = 32;
+            statusLabel.Margin = new Padding(0, 4, 0, 0);
             statusLabel.AutoEllipsis = true;
             header.Controls.Add(statusLabel, 1, 0);
 
@@ -331,14 +347,14 @@ namespace RpiNetbootWindowsGui
             layout.SetColumnSpan(cards, 2);
 
             cards.Controls.Add(CreateMetricCard("서버 PC", "10.73.0.10", "유선 이더넷 고정 IP"), 0, 0);
-            cards.Controls.Add(CreateMetricCard("저장소", "D:\\", "tftp / rootfs / tools"), 1, 0);
+            cards.Controls.Add(CreateMetricCard("저장소", GetStorageDisplayRoot(), "tftp / rootfs / tools"), 1, 0);
             cards.Controls.Add(CreateMetricCard("새 기기", "rpi-001", "기기 번호 기반 복제"), 2, 0);
             cards.Controls.Add(CreateMetricCard("넷부팅 대상", "RPi4", "Zero 2 W는 Gadget SD"), 3, 0);
 
             var taskPanel = new SoftPanel();
             taskPanel.Dock = DockStyle.Fill;
-            taskPanel.Margin = new Padding(0, 14, 14, 14);
-            taskPanel.Padding = new Padding(22);
+            taskPanel.Margin = new Padding(0, 10, 10, 10);
+            taskPanel.Padding = new Padding(16);
             taskPanel.FillColor = Color.White;
             taskPanel.BorderColor = cardBorder;
             layout.Controls.Add(taskPanel, 0, 2);
@@ -347,15 +363,15 @@ namespace RpiNetbootWindowsGui
             taskLayout.Dock = DockStyle.Fill;
             taskLayout.ColumnCount = 1;
             taskLayout.RowCount = 3;
-            taskLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+            taskLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             taskLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            taskLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
+            taskLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
             taskPanel.Controls.Add(taskLayout);
 
             var taskHeader = new Label();
-            taskHeader.Text = "실행 작업";
+            taskHeader.Text = "선택한 작업";
             taskHeader.ForeColor = ink;
-            taskHeader.Font = new Font("Segoe UI Semibold", 15f, FontStyle.Bold);
+            taskHeader.Font = new Font(UiFont, 11.5f, FontStyle.Bold);
             taskHeader.Dock = DockStyle.Fill;
             taskHeader.AutoEllipsis = true;
             taskLayout.Controls.Add(taskHeader, 0, 0);
@@ -365,7 +381,7 @@ namespace RpiNetbootWindowsGui
             taskTextBox.Text = "";
             taskTextBox.ForeColor = muted;
             taskTextBox.BackColor = Color.White;
-            taskTextBox.Font = new Font("Segoe UI", 10.2f);
+            taskTextBox.Font = new Font(UiFont, 9.1f);
             taskTextBox.Dock = DockStyle.Fill;
             taskTextBox.Multiline = true;
             taskTextBox.ReadOnly = true;
@@ -378,108 +394,119 @@ namespace RpiNetbootWindowsGui
             var actionRow = new FlowLayoutPanel();
             actionRow.Dock = DockStyle.Fill;
             actionRow.FlowDirection = FlowDirection.LeftToRight;
-            actionRow.WrapContents = true;
-            actionRow.Padding = new Padding(0, 12, 0, 0);
+            actionRow.WrapContents = false;
+            actionRow.Padding = new Padding(0, 8, 0, 0);
             actionRow.BackColor = Color.White;
             taskLayout.Controls.Add(actionRow, 0, 2);
 
             primaryButton = CreateMainButton("실행", teal, Color.White);
-            primaryButton.Width = 204;
+            primaryButton.Width = 216;
             primaryButton.Margin = new Padding(0, 0, 8, 8);
             primaryButton.AccessibleName = "선택한 작업 실행";
             tips.SetToolTip(primaryButton, "현재 선택한 자동화 작업을 실행합니다.");
             primaryButton.Click += delegate { RunSelectedTask(); };
             actionRow.Controls.Add(primaryButton);
 
-            secondaryButton = CreateMainButton("문서 열기", Color.FromArgb(237, 241, 236), ink);
-            secondaryButton.Width = 132;
+            secondaryButton = CreateMainButton("저장소 설정", buttonSoft, ink);
+            secondaryButton.Width = 130;
             secondaryButton.Margin = new Padding(0, 0, 8, 8);
-            secondaryButton.AccessibleName = "문서 폴더 열기";
-            tips.SetToolTip(secondaryButton, "자동화 사용법과 운영 문서가 들어 있는 docs 폴더를 엽니다.");
-            secondaryButton.Click += delegate { OpenDocsFolder(); };
+            secondaryButton.FlatAppearance.BorderColor = cardBorder;
+            secondaryButton.AccessibleName = "저장소 경로 설정";
+            tips.SetToolTip(secondaryButton, "TFTP, rootfs, downloads, tools 폴더를 둘 저장소를 선택합니다.");
+            secondaryButton.Click += delegate { ChooseStorageRoot(); };
             actionRow.Controls.Add(secondaryButton);
 
-            var utility = new Button();
-            utility.Text = "D:\\ 열기";
-            utility.FlatStyle = FlatStyle.Flat;
-            utility.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
-            utility.ForeColor = ink;
-            utility.BackColor = Color.FromArgb(237, 241, 236);
-            utility.Size = new Size(110, 52);
+            var utility = CreateMainButton("저장소 열기", buttonSoft, ink);
+            utility.Width = 118;
             utility.Margin = new Padding(0, 0, 8, 8);
-            utility.FlatAppearance.BorderSize = 0;
-            utility.Cursor = Cursors.Hand;
-            utility.AutoEllipsis = true;
-            utility.AccessibleName = "D 드라이브 저장소 열기";
-            tips.SetToolTip(utility, "TFTP, rootfs, downloads 폴더가 있는 D:\\ 저장소를 엽니다.");
-            utility.Click += delegate { OpenPath("D:\\"); };
+            utility.FlatAppearance.BorderColor = cardBorder;
+            utility.AccessibleName = "현재 저장소 열기";
+            tips.SetToolTip(utility, "현재 설정된 TFTP, rootfs, downloads 저장소를 엽니다.");
+            utility.Click += delegate { OpenPath(GetConfiguredStorageRoot()); };
             actionRow.Controls.Add(utility);
 
             var help = new SoftPanel();
             help.Dock = DockStyle.Fill;
-            help.Margin = new Padding(0, 14, 0, 14);
-            help.Padding = new Padding(20);
-            help.FillColor = Color.FromArgb(250, 252, 250);
-            help.BorderColor = Color.FromArgb(211, 222, 215);
+            help.Margin = new Padding(0, 10, 0, 10);
+            help.Padding = new Padding(16);
+            help.FillColor = Color.White;
+            help.BorderColor = cardBorder;
             layout.Controls.Add(help, 1, 2);
 
+            var helpLayout = new TableLayoutPanel();
+            helpLayout.Dock = DockStyle.Fill;
+            helpLayout.BackColor = Color.White;
+            helpLayout.ColumnCount = 1;
+            helpLayout.RowCount = 2;
+            helpLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            helpLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            help.Controls.Add(helpLayout);
+
             helpTitle = new Label();
-            helpTitle.Text = "도움말";
+            helpTitle.Text = "상세 안내";
             helpTitle.ForeColor = ink;
-            helpTitle.Font = new Font("Segoe UI Semibold", 14f, FontStyle.Bold);
-            helpTitle.Dock = DockStyle.Top;
-            helpTitle.Height = 34;
-            help.Controls.Add(helpTitle);
+            helpTitle.Font = new Font(UiFont, 11.3f, FontStyle.Bold);
+            helpTitle.Dock = DockStyle.Fill;
+            helpTitle.TextAlign = ContentAlignment.MiddleLeft;
+            helpLayout.Controls.Add(helpTitle, 0, 0);
 
             helpBody = new TextBox();
             helpBody.Text = "";
-            helpBody.ForeColor = Color.FromArgb(73, 88, 80);
-            helpBody.BackColor = Color.FromArgb(250, 252, 250);
-            helpBody.Font = new Font("Segoe UI", 10f);
+            helpBody.ForeColor = muted;
+            helpBody.BackColor = Color.White;
+            helpBody.Font = new Font(UiFont, 9.0f);
             helpBody.Dock = DockStyle.Fill;
             helpBody.Multiline = true;
             helpBody.ReadOnly = true;
             helpBody.WordWrap = true;
             helpBody.BorderStyle = BorderStyle.None;
-            helpBody.ScrollBars = ScrollBars.Vertical;
+            helpBody.ScrollBars = ScrollBars.None;
             helpBody.TabStop = false;
-            help.Controls.Add(helpBody);
+            helpLayout.Controls.Add(helpBody, 0, 1);
 
             var logPanel = new SoftPanel();
             logPanel.Dock = DockStyle.Fill;
-            logPanel.Padding = new Padding(14);
-            logPanel.FillColor = Color.FromArgb(19, 25, 23);
-            logPanel.BorderColor = Color.FromArgb(35, 45, 41);
+            logPanel.Padding = new Padding(12);
+            logPanel.FillColor = Color.FromArgb(28, 33, 39);
+            logPanel.BorderColor = Color.FromArgb(43, 50, 58);
             layout.Controls.Add(logPanel, 0, 3);
             layout.SetColumnSpan(logPanel, 2);
+
+            var logLayout = new TableLayoutPanel();
+            logLayout.Dock = DockStyle.Fill;
+            logLayout.BackColor = Color.FromArgb(28, 33, 39);
+            logLayout.ColumnCount = 1;
+            logLayout.RowCount = 2;
+            logLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+            logLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            logPanel.Controls.Add(logLayout);
 
             var logTitle = new Label();
             logTitle.Text = "실행 로그";
             logTitle.ForeColor = Color.White;
-            logTitle.Font = new Font("Segoe UI Semibold", 10.5f, FontStyle.Bold);
-            logTitle.Dock = DockStyle.Top;
-            logTitle.Height = 26;
-            logPanel.Controls.Add(logTitle);
+            logTitle.Font = new Font(UiFont, 9.0f, FontStyle.Bold);
+            logTitle.Dock = DockStyle.Fill;
+            logTitle.TextAlign = ContentAlignment.MiddleLeft;
+            logLayout.Controls.Add(logTitle, 0, 0);
 
             logBox = new TextBox();
             logBox.Multiline = true;
             logBox.ReadOnly = true;
-            logBox.ScrollBars = ScrollBars.Vertical;
-            logBox.BackColor = Color.FromArgb(19, 25, 23);
-            logBox.ForeColor = Color.FromArgb(220, 230, 224);
+            logBox.ScrollBars = ScrollBars.None;
+            logBox.BackColor = Color.FromArgb(28, 33, 39);
+            logBox.ForeColor = Color.FromArgb(226, 232, 238);
             logBox.BorderStyle = BorderStyle.None;
-            logBox.Font = new Font("Consolas", 9.5f);
+            logBox.Font = new Font("Consolas", 8.6f);
             logBox.Dock = DockStyle.Fill;
-            logPanel.Controls.Add(logBox);
-            logBox.BringToFront();
+            logLayout.Controls.Add(logBox, 0, 1);
         }
 
         private Control CreateMetricCard(string title, string value, string description)
         {
             var card = new SoftPanel();
             card.Dock = DockStyle.Fill;
-            card.Margin = new Padding(0, 0, 12, 0);
-            card.Padding = new Padding(16);
+            card.Margin = new Padding(0, 0, 8, 0);
+            card.Padding = new Padding(12);
             card.FillColor = Color.White;
             card.BorderColor = cardBorder;
 
@@ -488,15 +515,15 @@ namespace RpiNetbootWindowsGui
             content.BackColor = Color.White;
             content.ColumnCount = 1;
             content.RowCount = 3;
-            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
-            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             card.Controls.Add(content);
 
             var titleLabel = new Label();
             titleLabel.Text = title;
             titleLabel.ForeColor = muted;
-            titleLabel.Font = new Font("Segoe UI Semibold", 9.6f, FontStyle.Bold);
+            titleLabel.Font = new Font(UiFont, 8.0f, FontStyle.Bold);
             titleLabel.Dock = DockStyle.Fill;
             titleLabel.AutoEllipsis = true;
             titleLabel.BackColor = Color.White;
@@ -505,16 +532,20 @@ namespace RpiNetbootWindowsGui
             var valueLabel = new Label();
             valueLabel.Text = value;
             valueLabel.ForeColor = ink;
-            valueLabel.Font = new Font("Segoe UI Semibold", 20f, FontStyle.Bold);
+            valueLabel.Font = new Font(UiFont, title == "저장소" ? 11.4f : 13.1f, FontStyle.Bold);
             valueLabel.Dock = DockStyle.Fill;
             valueLabel.AutoEllipsis = true;
             valueLabel.BackColor = Color.White;
+            if (title == "저장소")
+            {
+                storageMetricValue = valueLabel;
+            }
             content.Controls.Add(valueLabel, 0, 1);
 
             var descLabel = new Label();
             descLabel.Text = description;
             descLabel.ForeColor = muted;
-            descLabel.Font = new Font("Segoe UI", 9f);
+            descLabel.Font = new Font(UiFont, 8.0f);
             descLabel.Dock = DockStyle.Fill;
             descLabel.AutoEllipsis = true;
             descLabel.BackColor = Color.White;
@@ -527,13 +558,16 @@ namespace RpiNetbootWindowsGui
             var button = new Button();
             button.Text = text;
             button.FlatStyle = FlatStyle.Flat;
-            button.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+            button.Font = new Font(UiFont, 9.0f, FontStyle.Bold);
             button.ForeColor = textColor;
             button.BackColor = fill;
-            button.Size = new Size(176, 52);
-            button.FlatAppearance.BorderSize = 0;
+            button.Size = new Size(176, 44);
+            button.FlatAppearance.BorderSize = 1;
+            button.FlatAppearance.BorderColor = fill;
+            button.FlatAppearance.MouseOverBackColor = fill;
+            button.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(fill, 0.05f);
             button.Cursor = Cursors.Hand;
-            button.MinimumSize = new Size(132, 52);
+            button.MinimumSize = new Size(112, 44);
             button.AutoEllipsis = true;
             button.TextAlign = ContentAlignment.MiddleCenter;
             return button;
@@ -549,6 +583,9 @@ namespace RpiNetbootWindowsGui
             pageSubtitle.Text = action.Description;
             primaryButton.Text = GetPrimaryButtonText(action);
             primaryButton.BackColor = action.Destructive ? amber : teal;
+            primaryButton.FlatAppearance.BorderColor = primaryButton.BackColor;
+            primaryButton.FlatAppearance.MouseOverBackColor = primaryButton.BackColor;
+            primaryButton.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(primaryButton.BackColor, 0.05f);
             primaryButton.AccessibleDescription = action.Description;
 
             foreach (Control c in navList.Controls)
@@ -565,8 +602,21 @@ namespace RpiNetbootWindowsGui
             {
                 SetMultilineText(taskTextBox, GetTaskBody(action));
             }
-            helpTitle.Text = action.Title + " 도움말";
+            helpTitle.Text = action.Title + " 안내";
             SetMultilineText(helpBody, GetHelpText(action.Task));
+        }
+
+        private void FocusSelectedNav()
+        {
+            if (navList == null) return;
+            foreach (Control c in navList.Controls)
+            {
+                if (string.Equals(c.Tag as string, selectedTask, StringComparison.OrdinalIgnoreCase))
+                {
+                    c.Focus();
+                    return;
+                }
+            }
         }
 
         private void SetMultilineText(TextBox box, string text)
@@ -612,7 +662,7 @@ namespace RpiNetbootWindowsGui
                 case "prepare-sd": return "SD카드에 EEPROM 쓰기";
                 case "clone-rpi4": return "새 RPi4 복제 시작";
                 case "zero2w-gadget-sd": return "gadget SD 패치";
-                case "docs": return "도움말 문서 열기";
+                case "docs": return "도움말 열기";
                 default: return "실행";
             }
         }
@@ -622,15 +672,15 @@ namespace RpiNetbootWindowsGui
             switch (task)
             {
                 case "status":
-                    return "처음에는 이 버튼을 누르세요. D: 저장소, 이더넷 IP, 공유기 연결, 서비스 포트 상태를 읽기 전용으로 확인합니다.\n\n정상이면 부팅 서비스 시작 또는 새 RPi4 등록/복제로 넘어갑니다.";
+                    return "처음에는 이 버튼을 누르세요. 현재 설정된 저장소, 이더넷 IP, 공유기 연결, 서비스 포트 상태를 읽기 전용으로 확인합니다.\n\n정상이면 부팅 서비스 시작 또는 새 RPi4 등록/복제로 넘어갑니다.";
                 case "server-setup":
-                    return "서버 PC를 네트워크 부팅용으로 맞춥니다. D:\\ 바로 아래에 tftp/rootfs/tools 구조를 확인하고 유선 이더넷을 10.73.0.10으로 적용합니다.\n\n다음: 부팅 서비스 시작을 누릅니다.";
+                    return "서버 PC를 네트워크 부팅용으로 맞춥니다. 저장소 설정에서 선택한 위치 아래에 tftp/rootfs/tools 구조를 확인하고 유선 이더넷을 10.73.0.10으로 적용합니다.\n\n다음: 부팅 서비스 시작을 누릅니다.";
                 case "lite-provider-start":
                     return "RPi4가 네트워크 부팅 요청을 보낼 때 응답할 DHCP/TFTP/NFS 서비스를 시작합니다.\n\n다음: 상태 확인을 누르고 새 RPi4 전원을 다시 넣습니다.";
                 case "prepare-sd":
-                    return "RPi4 전용입니다. S: SD카드만 지웁니다. D: rpi 저장소는 선택하면 안 됩니다.\n\n다음: RPi4를 이 SD카드로 한 번 부팅합니다. Zero 2 W용 SD는 별도 버튼을 쓰세요.";
+                    return "RPi4 전용입니다. S: SD카드만 지웁니다. 저장소 드라이브는 선택하면 안 됩니다.\n\n다음: RPi4를 이 SD카드로 한 번 부팅합니다. Zero 2 W용 SD는 별도 버튼을 쓰세요.";
                 case "clone-rpi4":
-                    return "새 Raspberry Pi 4를 등록하고 현재 성공한 bootfs/rootfs에서 복제합니다.\n\n입력 예:\n- 기기 번호: rpi-001\n- 시리얼: 8자리 hex\n- MAC: 88:a2:9e:xx:xx:xx\n\n자동 반영:\n- D:\\tftp\\<serial>\n- D:\\rootfs\\<serial>\n- hostname\n- /etc/rpi-netboot/client.json\n- machine-id/SSH host key 초기화";
+                    return "새 Raspberry Pi 4를 등록하고 현재 성공한 bootfs/rootfs에서 복제합니다.\n\n입력 예:\n- 기기 번호: rpi-001\n- 시리얼: 8자리 hex\n- MAC: 88:a2:9e:xx:xx:xx\n\n자동 반영:\n- " + GetConfiguredTftpRoot() + "\\<serial>\n- " + GetConfiguredRootfsRoot() + "\\<serial>\n- hostname\n- /etc/rpi-netboot/client.json\n- machine-id/SSH host key 초기화";
                 case "zero2w-gadget-sd":
                     return "Zero 2 W는 네트워크 부팅 대상이 아닙니다. S:의 Raspberry Pi OS boot 파티션을 USB Ethernet gadget용으로 패치합니다.\n\n연결: PWR IN이 아니라 mini HDMI 옆 USB data 포트를 PC에 꽂습니다.";
                 case "docs":
@@ -679,7 +729,7 @@ namespace RpiNetbootWindowsGui
 
             if (action.Task == "clone-rpi4")
             {
-                using (var dialog = new CloneRpi4Dialog())
+                using (var dialog = new CloneRpi4Dialog(GetConfiguredTftpRoot(), GetConfiguredRootfsRoot()))
                 {
                     if (dialog.ShowDialog(this) != DialogResult.OK) return;
                     pendingCloneRequest = dialog.Request;
@@ -714,6 +764,11 @@ namespace RpiNetbootWindowsGui
         private string BuildPowerShellArguments(ActionDefinition action)
         {
             string command = BuildPowerShellCommand(action);
+            return BuildPowerShellArguments(command);
+        }
+
+        private string BuildPowerShellArguments(string command)
+        {
             string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(command));
             return "-NoProfile -NonInteractive -OutputFormat Text -ExecutionPolicy Bypass -EncodedCommand " + encoded;
         }
@@ -768,7 +823,7 @@ namespace RpiNetbootWindowsGui
             switch (action.Task)
             {
                 case "server-setup":
-                    return "서버 PC 자동 준비를 실행합니다.\n\n변경 대상:\n- 유선 이더넷 IP: 10.73.0.10\n- 저장소 구조: D:\\tftp, D:\\rootfs, D:\\downloads\n- TFTP 파일 동기화와 방화벽 규칙\n\nD:가 rpi 저장소이고 이 PC가 서버 PC이면 [예]를 누르세요.";
+                    return "서버 PC 준비를 실행합니다.\n\n변경 대상:\n- 유선 이더넷 IP: 10.73.0.10\n- 저장소 구조: " + GetConfiguredTftpRoot() + ", " + GetConfiguredRootfsRoot() + ", " + Path.Combine(GetConfiguredStorageRoot(), "downloads") + "\n- TFTP 파일 동기화와 방화벽 규칙\n\n선택한 저장소가 맞고 이 PC가 서버 PC이면 [예]를 누르세요.";
                 case "lite-provider-start":
                     return "부팅 서비스를 시작합니다.\n\n실행 내용:\n- DHCP/TFTP 서버 시작\n- rootfs 서비스 시작\n- DHCP/TFTP/NFS 방화벽 규칙 확인\n\nPi가 다음 DHCP에서 예약 IP를 받게 됩니다. 계속하려면 [예]를 누르세요.";
                 case "prepare-sd":
@@ -872,6 +927,10 @@ namespace RpiNetbootWindowsGui
             statusLabel.Text = status;
             statusLabel.BackColor = busy ? Color.FromArgb(255, 246, 220) : tealSoft;
             statusLabel.ForeColor = busy ? amber : teal;
+            if (!busy && storageMetricValue != null)
+            {
+                storageMetricValue.Text = GetStorageDisplayRoot();
+            }
         }
 
         private bool IsPowerShellXmlNoise(string line)
@@ -892,6 +951,116 @@ namespace RpiNetbootWindowsGui
                 return;
             }
             logBox.AppendText(line + Environment.NewLine);
+            if (logBox.ScrollBars != ScrollBars.Vertical && logBox.Lines.Length > 8)
+            {
+                logBox.ScrollBars = ScrollBars.Vertical;
+            }
+        }
+
+        private string GetConfigPath()
+        {
+            return Path.Combine(projectRoot, "lab-10.73.json");
+        }
+
+        private string GetStorageDisplayRoot()
+        {
+            string root = GetConfiguredStorageRoot();
+            return root.Length > 18 ? root.Substring(0, 18) + "..." : root;
+        }
+
+        private string GetConfiguredStorageRoot()
+        {
+            string value = ReadJsonString(GetConfigPath(), "project_root");
+            if (string.IsNullOrWhiteSpace(value)) value = "D:\\";
+            return NormalizeStorageRoot(value);
+        }
+
+        private string GetConfiguredTftpRoot()
+        {
+            string value = ReadJsonString(GetConfigPath(), "tftp_root");
+            if (!string.IsNullOrWhiteSpace(value)) return value.TrimEnd('\\');
+            return Path.Combine(GetConfiguredStorageRoot(), "tftp");
+        }
+
+        private string GetConfiguredRootfsRoot()
+        {
+            string value = ReadJsonString(GetConfigPath(), "nfs_root");
+            if (!string.IsNullOrWhiteSpace(value)) return value.TrimEnd('\\');
+            return Path.Combine(GetConfiguredStorageRoot(), "rootfs");
+        }
+
+        private string ReadJsonString(string path, string property)
+        {
+            try
+            {
+                if (!File.Exists(path)) return "";
+                string text = File.ReadAllText(path, Encoding.UTF8);
+                Match match = Regex.Match(text, "\"" + Regex.Escape(property) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
+                if (!match.Success) return "";
+                return Regex.Unescape(match.Groups[1].Value);
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private string NormalizeStorageRoot(string value)
+        {
+            string full = Path.GetFullPath((value ?? "").Trim());
+            string trimmed = full.TrimEnd('\\', '/');
+            if (Regex.IsMatch(trimmed, "^[A-Za-z]:$")) return trimmed + "\\";
+            return trimmed;
+        }
+
+        private void ChooseStorageRoot()
+        {
+            if (isRunning) return;
+            using (var dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "TFTP, rootfs, downloads, tools 폴더를 둘 저장소를 선택하세요.";
+                dialog.ShowNewFolderButton = true;
+                string current = GetConfiguredStorageRoot();
+                if (Directory.Exists(current)) dialog.SelectedPath = current;
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+                string selected = NormalizeStorageRoot(dialog.SelectedPath);
+                DialogResult result = MessageBox.Show(
+                    "저장소를 다음 위치로 설정합니다.\n\n" + selected + "\n\n이 아래에 tftp, rootfs, downloads, logs, tools 폴더를 사용합니다.",
+                    "저장소 설정",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information,
+                    MessageBoxDefaultButton.Button1);
+                if (result != DialogResult.Yes) return;
+
+                RunPowerShell("저장소 설정", BuildPowerShellArguments(BuildStorageConfigCommand(selected)));
+            }
+        }
+
+        private string BuildStorageConfigCommand(string storageRoot)
+        {
+            string configPath = GetConfigPath();
+            string tftpRoot = Path.Combine(storageRoot, "tftp");
+            string rootfsRoot = Path.Combine(storageRoot, "rootfs");
+            string downloads = Path.Combine(storageRoot, "downloads");
+            string logs = Path.Combine(storageRoot, "logs");
+            string tools = Path.Combine(storageRoot, "tools");
+            string iscsiRoot = Path.Combine(storageRoot, "iscsi");
+
+            return "$enc=New-Object System.Text.UTF8Encoding -ArgumentList $false; " +
+                   "[Console]::OutputEncoding=$enc; $OutputEncoding=$enc; " +
+                   "$ProgressPreference='SilentlyContinue'; " +
+                   "$config=" + PsSingle(configPath) + "; " +
+                   "$root=" + PsSingle(storageRoot) + "; " +
+                   "$cfg=if(Test-Path -LiteralPath $config){Get-Content -LiteralPath $config -Raw -Encoding UTF8|ConvertFrom-Json}else{[pscustomobject]@{name='rpi-netboot-windows';method='windows-lite-nfs';server_ip='10.73.0.10';router_ip='10.73.0.1';dns_server='10.73.0.1';subnet_mask='255.255.255.0';dhcp_start='10.73.0.100';dhcp_end='10.73.0.199';nfs_alias='/rpi';vhdx_size_gb=32;clients=@()}}; " +
+                   "function Set-Prop($o,$n,$v){if($o.PSObject.Properties[$n]){$o.$n=$v}else{$o|Add-Member -NotePropertyName $n -NotePropertyValue $v}}; " +
+                   "Set-Prop $cfg 'project_root' $root; " +
+                   "Set-Prop $cfg 'tftp_root' " + PsSingle(tftpRoot) + "; " +
+                   "Set-Prop $cfg 'nfs_root' " + PsSingle(rootfsRoot) + "; " +
+                   "Set-Prop $cfg 'iscsi_root' " + PsSingle(iscsiRoot) + "; " +
+                   "foreach($path in @($root," + PsSingle(tftpRoot) + "," + PsSingle(rootfsRoot) + "," + PsSingle(downloads) + "," + PsSingle(logs) + "," + PsSingle(tools) + ")){New-Item -ItemType Directory -Force -Path $path|Out-Null}; " +
+                   "$cfg|ConvertTo-Json -Depth 20|Set-Content -LiteralPath $config -Encoding UTF8; " +
+                   "Write-Output ('저장소 설정 완료: ' + $root) 3>&1 4>&1 5>&1 6>&1";
         }
 
         private void OpenDocsFolder()
@@ -929,20 +1098,15 @@ namespace RpiNetbootWindowsGui
 
         private void LaunchAdmin(string task)
         {
-            string adminExe = Path.Combine(projectRoot, "RPI-Netboot-Manager-Admin.exe");
-            string updatedAdminExe = Path.Combine(projectRoot, "RPI-Netboot-Manager-Admin-Update.exe");
-            if (File.Exists(updatedAdminExe) && (!File.Exists(adminExe) || File.GetLastWriteTimeUtc(updatedAdminExe) >= File.GetLastWriteTimeUtc(adminExe)))
+            string selfExe = Application.ExecutablePath;
+            if (!File.Exists(selfExe))
             {
-                adminExe = updatedAdminExe;
-            }
-            if (!File.Exists(adminExe))
-            {
-                MessageBox.Show("관리자 실행 파일을 찾을 수 없습니다.\n" + adminExe, "관리자 권한 필요", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("실행 파일을 찾을 수 없습니다.\n" + selfExe, "관리자 권한 필요", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             DialogResult result = MessageBox.Show(
-                "이 작업은 관리자 권한이 필요합니다.\n\n관리자 모드로 다시 열까요?",
+                "이 작업은 관리자 권한이 필요합니다.\n\n관리자 권한으로 다시 열까요?",
                 "관리자 권한 필요",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Information,
@@ -953,7 +1117,7 @@ namespace RpiNetbootWindowsGui
             {
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = adminExe,
+                    FileName = selfExe,
                     Arguments = "--task " + Quote(task) + " --run",
                     WorkingDirectory = projectRoot,
                     UseShellExecute = true,
@@ -985,15 +1149,15 @@ namespace RpiNetbootWindowsGui
             }
             using (Pen p = new Pen(Color.White, 3))
             {
-                g.DrawRectangle(p, rect.Left + 13, rect.Top + 15, 22, 17);
-                g.DrawLine(p, rect.Left + 24, rect.Top + 32, rect.Left + 24, rect.Top + 39);
-                g.DrawLine(p, rect.Left + 17, rect.Top + 39, rect.Left + 31, rect.Top + 39);
+                g.DrawRectangle(p, rect.Left + 11, rect.Top + 13, 20, 15);
+                g.DrawLine(p, rect.Left + 21, rect.Top + 28, rect.Left + 21, rect.Top + 35);
+                g.DrawLine(p, rect.Left + 15, rect.Top + 35, rect.Left + 28, rect.Top + 35);
             }
             using (Brush b = new SolidBrush(Color.FromArgb(255, 217, 122)))
             {
-                g.FillEllipse(b, rect.Left + 9, rect.Top + 8, 8, 8);
-                g.FillEllipse(b, rect.Left + 32, rect.Top + 8, 8, 8);
-                g.FillEllipse(b, rect.Left + 21, rect.Top + 4, 8, 8);
+                g.FillEllipse(b, rect.Left + 8, rect.Top + 7, 6, 6);
+                g.FillEllipse(b, rect.Left + 28, rect.Top + 7, 6, 6);
+                g.FillEllipse(b, rect.Left + 18, rect.Top + 4, 6, 6);
             }
         }
 
@@ -1045,6 +1209,7 @@ namespace RpiNetbootWindowsGui
 
     internal sealed class CloneRpi4Dialog : Form
     {
+        private static readonly string UiFont = UiFonts.Family;
         private readonly TextBox deviceIdBox;
         private readonly TextBox serialBox;
         private readonly TextBox macBox;
@@ -1053,25 +1218,25 @@ namespace RpiNetbootWindowsGui
 
         public CloneRpi4Request Request { get; private set; }
 
-        public CloneRpi4Dialog()
+        public CloneRpi4Dialog(string tftpRoot, string rootfsRoot)
         {
             Text = "새 RPi4 등록/복제";
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(560, 430);
+            ClientSize = new Size(600, 470);
             BackColor = Color.FromArgb(245, 247, 248);
-            Font = new Font("Segoe UI", 9.5f);
+            Font = new Font(UiFont, 9.0f);
 
             var root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
             root.Padding = new Padding(24);
             root.ColumnCount = 1;
             root.RowCount = 5;
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 208));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
             Controls.Add(root);
@@ -1079,15 +1244,15 @@ namespace RpiNetbootWindowsGui
             var title = new Label();
             title.Text = "새 Raspberry Pi 4 만들기";
             title.ForeColor = Color.FromArgb(26, 33, 30);
-            title.Font = new Font("Segoe UI Semibold", 19f, FontStyle.Bold);
+            title.Font = new Font(UiFont, 16.0f, FontStyle.Bold);
             title.Dock = DockStyle.Top;
-            title.Height = 36;
+            title.Height = 34;
             root.Controls.Add(title, 0, 0);
 
             var subtitle = new Label();
             subtitle.Text = "기기 번호를 기준으로 bootfs, rootfs, hostname, 내부 설정 파일을 만듭니다.";
             subtitle.ForeColor = Color.FromArgb(82, 96, 88);
-            subtitle.Font = new Font("Segoe UI", 10f);
+            subtitle.Font = new Font(UiFont, 8.8f);
             subtitle.Dock = DockStyle.Fill;
             subtitle.Top = 38;
             subtitle.Padding = new Padding(0, 38, 0, 0);
@@ -1098,7 +1263,7 @@ namespace RpiNetbootWindowsGui
             fields.Dock = DockStyle.Fill;
             fields.ColumnCount = 2;
             fields.RowCount = 4;
-            fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+            fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
             fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             for (int i = 0; i < 4; i++) fields.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
             root.Controls.Add(fields, 0, 1);
@@ -1109,12 +1274,14 @@ namespace RpiNetbootWindowsGui
             ipBox = AddField(fields, 3, "예약 IP", "비워두면 자동 할당");
 
             var note = new Label();
-            note.Text = "현재 골든 소스: D:\\tftp\\d80c0b88, D:\\rootfs\\d80c0b88";
+            note.Text = "현재 골든 소스: " + tftpRoot + "\\d80c0b88, " + rootfsRoot + "\\d80c0b88";
             note.ForeColor = Color.FromArgb(15, 118, 110);
             note.BackColor = Color.FromArgb(220, 244, 239);
             note.TextAlign = ContentAlignment.MiddleLeft;
             note.Padding = new Padding(14, 0, 14, 0);
             note.Dock = DockStyle.Fill;
+            note.Font = new Font(UiFont, 8.2f);
+            note.AutoEllipsis = true;
             root.Controls.Add(note, 0, 2);
 
             errorLabel = new Label();
@@ -1148,12 +1315,12 @@ namespace RpiNetbootWindowsGui
             lab.Dock = DockStyle.Fill;
             lab.TextAlign = ContentAlignment.MiddleLeft;
             lab.ForeColor = Color.FromArgb(26, 33, 30);
-            lab.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+            lab.Font = new Font(UiFont, 9.0f, FontStyle.Bold);
             fields.Controls.Add(lab, 0, row);
 
             var box = new TextBox();
             box.Dock = DockStyle.Fill;
-            box.Font = new Font("Segoe UI", 10.5f);
+            box.Font = new Font(UiFont, 9.2f);
             box.Margin = new Padding(0, 9, 0, 8);
             box.AccessibleName = label;
             box.Text = "";
@@ -1170,8 +1337,8 @@ namespace RpiNetbootWindowsGui
             button.FlatAppearance.BorderSize = 0;
             button.BackColor = fill;
             button.ForeColor = textColor;
-            button.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
-            button.Size = new Size(128, 44);
+            button.Font = new Font(UiFont, 9.0f, FontStyle.Bold);
+            button.Size = new Size(124, 42);
             button.Margin = new Padding(8, 6, 0, 6);
             button.Cursor = Cursors.Hand;
             return button;
@@ -1254,7 +1421,7 @@ namespace RpiNetbootWindowsGui
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
             Cursor = Cursors.Hand;
-            Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+            Font = new Font(UiFonts.Family, 8.9f, FontStyle.Bold);
             TabStop = true;
             AccessibleRole = AccessibleRole.PushButton;
         }
@@ -1272,29 +1439,39 @@ namespace RpiNetbootWindowsGui
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            Color fill = Selected ? Color.FromArgb(38, 70, 64) : Color.FromArgb(24, 34, 31);
-            Color text = Selected ? Color.White : Color.FromArgb(195, 205, 199);
-            Color icon = Selected ? Color.FromArgb(132, 225, 209) : Color.FromArgb(139, 153, 146);
+            Color fill = Selected ? Color.FromArgb(229, 243, 240) : Color.FromArgb(255, 255, 255);
+            Color text = Selected ? Color.FromArgb(0, 82, 72) : Color.FromArgb(43, 52, 63);
+            Color icon = Selected ? Color.FromArgb(0, 103, 92) : Color.FromArgb(102, 114, 128);
 
             using (GraphicsPath path = RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), 8))
             using (Brush b = new SolidBrush(fill))
             {
                 e.Graphics.FillPath(b, path);
             }
+            if (Selected)
+            {
+                using (GraphicsPath path = RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), 8))
+                using (Pen border = new Pen(Color.FromArgb(181, 220, 211)))
+                using (Brush accent = new SolidBrush(Color.FromArgb(0, 103, 92)))
+                {
+                    e.Graphics.DrawPath(border, path);
+                    e.Graphics.FillRectangle(accent, 0, 12, 3, Height - 24);
+                }
+            }
             if (Focused)
             {
-                using (Pen focus = new Pen(Color.FromArgb(255, 217, 122), 2))
+                using (Pen focus = new Pen(Color.FromArgb(0, 103, 92), 2))
                 {
                     e.Graphics.DrawRectangle(focus, 2, 2, Width - 5, Height - 5);
                 }
             }
 
-            DrawIcon(e.Graphics, Icon, new Rectangle(16, 15, 24, 24), icon);
+            DrawIcon(e.Graphics, Icon, new Rectangle(14, 12, 21, 21), icon);
             TextRenderer.DrawText(
                 e.Graphics,
                 Text,
                 Font,
-                new Rectangle(52, 0, Width - 58, Height),
+                new Rectangle(46, 0, Width - 54, Height),
                 text,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }

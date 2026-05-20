@@ -1,31 +1,36 @@
 {
-  "updatedAt": "2026-05-19T15:15:00+09:00",
+  "updatedAt": "2026-05-20T14:25:00+09:00",
   "nodes": [
     { "id": "server-pc", "type": "machine", "label": "Windows server PC", "ip": "10.73.0.10" },
     { "id": "router", "type": "network", "label": "ipTIME router", "ip": "10.73.0.1" },
-    { "id": "rpi4-d80c0b88", "type": "device", "label": "Test RPi4", "mac": "88:a2:9e:4f:a9:b1", "ip": "10.73.0.155" },
+    { "id": "rpi4-d80c0b88", "type": "device", "label": "Known-good RPi4", "mac": "88:a2:9e:4f:a9:b1", "ip": "10.73.0.155", "serial": "d80c0b88" },
     { "id": "provider-winnfsd", "type": "provider", "label": "WinNFSd" },
     { "id": "provider-hanewin", "type": "provider", "label": "haneWIN portable" },
     { "id": "provider-linux-nfs", "type": "provider", "label": "Linux nfs-kernel-server" },
-    { "id": "attempt-20260519-133535", "type": "attempt", "label": "haneWIN UDP corrected attempt" },
-    { "id": "verdict-nfs-invalid-argument", "type": "verdict", "label": "NFS_MOUNT_INVALID_ARGUMENT" },
     { "id": "attempt-20260519-144335", "type": "attempt", "label": "haneWIN minimal systemd explicit" },
     { "id": "verdict-boot-userspace", "type": "verdict", "label": "BOOT_REACHED_USERSPACE" },
     { "id": "clone-script", "type": "tool", "label": "clone-rpi4-client.ps1" },
-    { "id": "golden-d80c0b88", "type": "golden-source", "label": "Known-good d80c0b88 bootfs/rootfs" }
+    { "id": "gui-manager", "type": "tool", "label": "RPI-Netboot-Manager.exe" },
+    { "id": "golden-d80c0b88", "type": "golden-source", "label": "Known-good d80c0b88 bootfs/rootfs" },
+    { "id": "eeprom-cache", "type": "artifact", "label": "windows/cache/downloads Pi 4 EEPROM image" },
+    { "id": "sd-disk3", "type": "media", "label": "Disk 3 S: bootfs 29.72GB SD candidate" },
+    { "id": "legacy-workspace", "type": "workspace", "label": "rpi-netboot-windows legacy snapshot" },
+    { "id": "active-workspace", "type": "workspace", "label": "rpi-pxe-manager/windows active workspace" }
   ],
   "edges": [
     { "from": "server-pc", "to": "router", "type": "connected_to" },
     { "from": "rpi4-d80c0b88", "to": "server-pc", "type": "dhcp_tftp_from" },
-    { "from": "attempt-20260519-133535", "to": "provider-hanewin", "type": "uses_provider" },
-    { "from": "attempt-20260519-133535", "to": "rpi4-d80c0b88", "type": "boots_device" },
-    { "from": "attempt-20260519-133535", "to": "verdict-nfs-invalid-argument", "type": "produced" },
-    { "from": "provider-linux-nfs", "to": "verdict-nfs-invalid-argument", "type": "next_ab_test_for" },
     { "from": "attempt-20260519-144335", "to": "provider-hanewin", "type": "uses_provider" },
     { "from": "attempt-20260519-144335", "to": "rpi4-d80c0b88", "type": "boots_device" },
     { "from": "attempt-20260519-144335", "to": "verdict-boot-userspace", "type": "produced" },
+    { "from": "provider-hanewin", "to": "verdict-boot-userspace", "type": "proof_only_not_production" },
     { "from": "golden-d80c0b88", "to": "rpi4-d80c0b88", "type": "derived_from" },
     { "from": "clone-script", "to": "golden-d80c0b88", "type": "clones_from" },
-    { "from": "provider-hanewin", "to": "verdict-boot-userspace", "type": "proof_only_not_production" }
+    { "from": "gui-manager", "to": "clone-script", "type": "wraps" },
+    { "from": "gui-manager", "to": "eeprom-cache", "type": "uses_for_eeprom_sd" },
+    { "from": "sd-disk3", "to": "eeprom-cache", "type": "candidate_write_target_needs_user_confirm" },
+    { "from": "active-workspace", "to": "gui-manager", "type": "contains" },
+    { "from": "legacy-workspace", "to": "active-workspace", "type": "superseded_by" },
+    { "from": "provider-linux-nfs", "to": "provider-hanewin", "type": "production_candidate_replaces_proof_provider" }
   ]
 }

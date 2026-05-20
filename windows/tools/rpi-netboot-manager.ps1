@@ -1,10 +1,11 @@
 ﻿param(
-    [ValidateSet("menu", "status", "server-setup", "lite-provider-start", "lite-provider-stop", "install-services", "configure-services", "prepare-rpi4-eeprom-sd", "prepare-sd", "copy-boot", "prepare-rpi4-rootfs", "prepare-zero2w-gadget-sd", "verify", "sync-tftp", "firewall", "restore-network", "docs")]
+    [ValidateSet("menu", "status", "server-setup", "lite-provider-start", "prepare-rpi4-eeprom-sd", "prepare-sd", "prepare-zero2w-gadget-sd", "verify", "docs")]
     [string] $Task = "menu",
 
     [string] $Config = ".\lab-10.73.json",
     [string] $LegacyBackup = "C:\Users\test\Documents\workspace\rpi-pxe-manager\clients_backup.json",
     [string] $Generated = ".\generated\lab-10.73",
+    [string] $StorageRoot = "",
     [string] $SdDriveLetter = "S",
     [ValidateSet("pi4")]
     [string] $Model = "pi4",
@@ -25,7 +26,7 @@ function Test-Admin {
 
 function Assert-Admin {
     if (-not (Test-Admin)) {
-        throw "This task needs administrator rights. Run RPI-Netboot-Manager-Admin.exe."
+        throw "This task needs administrator rights. Run RPI-Netboot-Manager.exe and approve the UAC prompt."
     }
 }
 
@@ -56,6 +57,57 @@ function Read-ConfigObject {
         throw "Config not found: $Config"
     }
     return Get-Content -LiteralPath $Config -Raw -Encoding UTF8 | ConvertFrom-Json
+}
+
+function Normalize-StorageRoot {
+    param([string] $Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        $Path = "D:\"
+    }
+    $full = [System.IO.Path]::GetFullPath($Path.Trim())
+    $trimmed = $full.TrimEnd([char[]]@("\", "/"))
+    if ($trimmed -match '^[A-Za-z]:$') {
+        return ($trimmed + "\")
+    }
+    return $trimmed
+}
+
+function Get-StorageLayout {
+    param([object] $ConfigObject = $null)
+
+    $root = $StorageRoot
+    $overrideStorage = -not [string]::IsNullOrWhiteSpace($root)
+    if ([string]::IsNullOrWhiteSpace($root) -and $ConfigObject -and $ConfigObject.project_root) {
+        $root = [string]$ConfigObject.project_root
+    }
+    $root = Normalize-StorageRoot $root
+
+    $tftp = if (-not $overrideStorage -and $ConfigObject -and $ConfigObject.tftp_root) { [string]$ConfigObject.tftp_root } else { Join-Path $root "tftp" }
+    $rootfs = if (-not $overrideStorage -and $ConfigObject -and $ConfigObject.nfs_root) { [string]$ConfigObject.nfs_root } else { Join-Path $root "rootfs" }
+    $iscsi = if (-not $overrideStorage -and $ConfigObject -and $ConfigObject.iscsi_root) { [string]$ConfigObject.iscsi_root } else { Join-Path $root "iscsi" }
+
+    [pscustomobject]@{
+        ProjectRoot = $root
+        TftpRoot = $tftp
+        RootfsRoot = $rootfs
+        IscsiRoot = $iscsi
+        Downloads = Join-Path $root "downloads"
+        Logs = Join-Path $root "logs"
+        Tools = Join-Path $root "tools"
+        NetbootTools = Join-Path (Join-Path $root "tools") "rpi-netboot"
+    }
+}
+
+function Get-ProjectDownloadCache {
+    return (Join-Path $ProjectRoot "cache\downloads")
+}
+
+function Update-ConfigStorage {
+    param([object] $ConfigObject, [object] $Layout)
+    $ConfigObject.project_root = $Layout.ProjectRoot
+    $ConfigObject.tftp_root = $Layout.TftpRoot
+    $ConfigObject.nfs_root = $Layout.RootfsRoot
+    $ConfigObject.iscsi_root = $Layout.IscsiRoot
 }
 
 function Confirm-Destructive {
@@ -158,12 +210,13 @@ function Invoke-RegAdd {
 
 function Show-Status {
     $cfg = if (Test-Path -LiteralPath $Config) { Read-ConfigObject } else { $null }
+    $storage = Get-StorageLayout $cfg
     $routerAddress = if ($cfg -and $cfg.router_ip) { [string]$cfg.router_ip } else { "10.73.0.1" }
     $serverAddressExpected = if ($cfg -and $cfg.server_ip) { [string]$cfg.server_ip } else { "10.73.0.10" }
 
     Write-Output "상태 확인은 Raspberry Pi 4 네트워크 부팅 전에 필요한 7가지를 봅니다."
     Write-Output "정책: 네트워크 부팅 대상은 RPi4만입니다. Zero 2 W는 SD boot + USB gadget으로 준비합니다."
-    Write-Output "1. D: 저장소와 S: SD카드"
+    Write-Output "1. 저장소와 S: SD카드"
     Write-Output "2. 서버 PC 이더넷 IP와 공유기 연결"
     Write-Output "3. lab 설정 파일과 TFTP/rootfs 폴더"
     Write-Output "4. DHCP/TFTP/NFS 서비스 포트"
@@ -172,13 +225,21 @@ function Show-Status {
     Write-Output "7. 지금 다음에 눌러야 할 버튼"
 
     Invoke-Step "1. 저장소 / SD카드" {
-        $d = Get-Volume -DriveLetter D -ErrorAction SilentlyContinue
-        if ($d -and $d.FileSystemLabel -eq "rpi" -and $d.FileSystem -eq "NTFS" -and $d.DriveType -eq "Fixed") {
-            Write-Check "정상" "D: 저장소" "라벨 rpi, NTFS, 고정 디스크, 남은 공간 $(Format-Size ([UInt64]$d.SizeRemaining))"
-        } elseif ($d) {
-            Write-Check "오류" "D: 저장소" "기대값은 rpi/NTFS/Fixed인데 실제는 '$($d.FileSystemLabel)' '$($d.FileSystem)' '$($d.DriveType)'"
+        $root = [string]$storage.ProjectRoot
+        $rootDrive = Split-Path -Qualifier $root
+        $volume = $null
+        if ($rootDrive -match '^[A-Za-z]:$') {
+            $volume = Get-Volume -DriveLetter $rootDrive.TrimEnd(":") -ErrorAction SilentlyContinue
+        }
+        if (Test-Path -LiteralPath $root -PathType Container) {
+            $detail = if ($volume) {
+                "$root, $($volume.FileSystemLabel) $($volume.FileSystem) $($volume.DriveType), 남은 공간 $(Format-Size ([UInt64]$volume.SizeRemaining))"
+            } else {
+                $root
+            }
+            Write-Check "정상" "저장소" $detail
         } else {
-            Write-Check "오류" "D: 저장소" "D: 드라이브가 없습니다. SD카드가 D:를 차지했는지 확인해야 합니다."
+            Write-Check "필요" "저장소" "$root 폴더가 없습니다. '서버 PC 준비'를 누르세요."
         }
 
         $sd = Get-Volume -DriveLetter $SdDriveLetter -ErrorAction SilentlyContinue
@@ -212,7 +273,7 @@ function Show-Status {
         if ($serverAddress) {
             Write-Check "정상" "서버 IP" "$($serverAddress.InterfaceAlias)에 $serverAddressExpected/24 적용됨"
         } else {
-            Write-Check "오류" "서버 IP" "유선 이더넷에 $serverAddressExpected/24가 필요합니다. '서버 PC 자동 준비'를 누르세요."
+            Write-Check "오류" "서버 IP" "유선 이더넷에 $serverAddressExpected/24가 필요합니다. '서버 PC 준비'를 누르세요."
         }
 
         $routerOk = Test-Connection -ComputerName $routerAddress -Count 1 -Quiet -ErrorAction SilentlyContinue
@@ -234,35 +295,35 @@ function Show-Status {
 
     Invoke-Step "3. 설정 / 폴더" {
         if (-not $cfg) {
-            Write-Check "오류" "lab 설정" "$Config 파일이 없습니다. '서버 PC 자동 준비'가 필요합니다."
+            Write-Check "오류" "lab 설정" "$Config 파일이 없습니다. '서버 PC 준비'가 필요합니다."
             return
         }
 
         Write-Check "정상" "lab 설정" "등록된 RPi4 $(@($cfg.clients).Count)대, 서버 IP $($cfg.server_ip), 공유기 $($cfg.router_ip), 방식 $($cfg.method)"
 
-        foreach ($folder in @($cfg.tftp_root, $cfg.nfs_root, "D:\downloads", "D:\logs", "D:\tools")) {
+        foreach ($folder in @($storage.TftpRoot, $storage.RootfsRoot, $storage.Downloads, $storage.Logs, $storage.Tools)) {
             if (Test-Folder $folder) {
                 Write-Check "정상" $folder "폴더 있음"
             } else {
-                Write-Check "필요" $folder "폴더 없음. '서버 PC 자동 준비'를 누르세요."
+                Write-Check "필요" $folder "폴더 없음. '서버 PC 준비'를 누르세요."
             }
         }
 
-        $tftpDirs = Get-FolderCount $cfg.tftp_root
-        $rootfsDirs = Get-FolderCount $cfg.nfs_root
+        $tftpDirs = Get-FolderCount $storage.TftpRoot
+        $rootfsDirs = Get-FolderCount $storage.RootfsRoot
         Write-Check "정상" "TFTP 클라이언트 폴더" "${tftpDirs}개. 각 Pi serial별 폴더입니다."
         Write-Check "정상" "rootfs 클라이언트 폴더" "${rootfsDirs}개. 실제 등록된 RPi4와 맞는지 아래 정리 후보를 확인합니다."
 
         $bootFiles = 0
-        if (Test-Folder $cfg.tftp_root) {
-            $bootFileMatches = @(Get-ChildItem -LiteralPath $cfg.tftp_root -Recurse -File -ErrorAction SilentlyContinue |
+        if (Test-Folder $storage.TftpRoot) {
+            $bootFileMatches = @(Get-ChildItem -LiteralPath $storage.TftpRoot -Recurse -File -ErrorAction SilentlyContinue |
                 Where-Object { $_.Name -match "^(start4\.elf|fixup4\.dat|kernel.*\.img|.*\.dtb)$" })
             $bootFiles = $bootFileMatches.Count
         }
         if ($bootFiles -gt 0) {
             Write-Check "정상" "TFTP 실제 부팅 파일" "$($bootFiles)개 발견"
         } else {
-            Write-Check "필요" "TFTP 실제 부팅 파일" "현재 cmdline/config 중심입니다. 첫 Pi의 boot partition 파일을 D:\tftp\<serial>에 채워야 합니다."
+            Write-Check "필요" "TFTP 실제 부팅 파일" "현재 cmdline/config 중심입니다. 첫 Pi의 boot partition 파일을 $($storage.TftpRoot)\<serial>에 채워야 합니다."
         }
     }
 
@@ -300,10 +361,10 @@ function Show-Status {
     }
 
     Invoke-Step "5. 부팅 서비스 상태" {
-        $litePidPath = "D:\tools\rpi-netboot\run\rpi-boot-lite.pid"
-        $nfsPidPath = "D:\tools\rpi-netboot\run\winnfsd.pid"
-        $liteExe = "D:\tools\rpi-netboot\bin\RpiBootServiceLite.exe"
-        $nfsExe = "D:\tools\rpi-netboot\winnfsd\WinNFSd.exe"
+        $litePidPath = Join-Path $storage.NetbootTools "run\rpi-boot-lite.pid"
+        $nfsPidPath = Join-Path $storage.NetbootTools "run\winnfsd.pid"
+        $liteExe = Join-Path $storage.NetbootTools "bin\RpiBootServiceLite.exe"
+        $nfsExe = Join-Path $storage.NetbootTools "winnfsd\WinNFSd.exe"
 
         if (Test-Path -LiteralPath $liteExe) {
             Write-Check "정상" "내장 DHCP/TFTP 파일" $liteExe
@@ -312,7 +373,7 @@ function Show-Status {
         }
 
         if (Test-Path -LiteralPath $nfsExe) {
-            Write-Check "정상" "rootfs 서비스 파일" $nfsExe
+            Write-Check "정상" "rootfs 서비스 파일" "준비됨"
         } else {
             Write-Check "필요" "rootfs 서비스 파일" "아직 준비되지 않았습니다. '부팅 서비스 시작'을 누르면 준비합니다."
         }
@@ -337,13 +398,13 @@ function Show-Status {
 
     Invoke-Step "6. 저장소 정리 후보" {
         if (-not $cfg) {
-            Write-Check "주의" "정리 후보" "lab 설정이 없어 D:\ 정리 후보를 판단하지 않았습니다."
+            Write-Check "주의" "정리 후보" "lab 설정이 없어 저장소 정리 후보를 판단하지 않았습니다."
         } else {
             $registered = @{}
             foreach ($client in @($cfg.clients)) {
                 if ($client.serial) { $registered[[string]$client.serial] = $true }
             }
-            foreach ($root in @([string]$cfg.tftp_root, [string]$cfg.nfs_root)) {
+            foreach ($root in @([string]$storage.TftpRoot, [string]$storage.RootfsRoot)) {
                 if (Test-Folder $root) {
                     $stale = @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
                         Where-Object { -not $registered.ContainsKey($_.Name) })
@@ -356,7 +417,7 @@ function Show-Status {
                 }
             }
 
-            foreach ($folder in @("D:\backups", "D:\iscsi", "D:\templates\golden")) {
+            foreach ($folder in @((Join-Path $storage.ProjectRoot "backups"), $storage.IscsiRoot, (Join-Path $storage.ProjectRoot "templates\golden"))) {
                 if (Test-Folder $folder -and (Get-FileCount $folder) -eq 0 -and (Get-FolderCount $folder) -eq 0) {
                     Write-Check "주의" $folder "현재 비어 있습니다. 운영에 필요해질 때 다시 만들 수 있습니다."
                 }
@@ -368,8 +429,8 @@ function Show-Status {
         if (-not (Test-Admin)) {
             Write-Check "주의" "관리자 권한" "설치/SD 쓰기/방화벽 작업을 누르면 관리자 모드로 다시 열어야 합니다."
         }
-        Write-Output "권장 순서:"
-        Write-Output "1. 상태 확인으로 D:\ 저장소와 네트워크를 확인"
+        Write-Output "작업 흐름:"
+        Write-Output "1. 상태 확인으로 저장소와 네트워크를 확인"
         Write-Output "2. 서버 PC 준비로 이더넷과 기본 폴더를 맞춤"
         Write-Output "3. 부팅 서비스 시작"
         Write-Output "4. 새 RPi4 등록/복제로 기기 번호, 시리얼, MAC 입력"
@@ -379,17 +440,16 @@ function Show-Status {
 
 function Invoke-ServerSetup {
     Assert-Admin
-    Invoke-Step "Fix drive letters" {
-        Invoke-Tool "tools\fix-rpi-drive-letters.ps1"
-    }
+    $cfg = if (Test-Path -LiteralPath $Config) { Read-ConfigObject } else { $null }
+    $storage = Get-StorageLayout $cfg
     Invoke-Step "Set Ethernet to 10.73.0.10" {
         Invoke-Tool "tools\set-ethernet-10.73.ps1"
     }
-    Invoke-Step "Create D: storage folders" {
-        foreach ($path in @("D:\tftp", "D:\rootfs", "D:\downloads", "D:\logs", "D:\tools")) {
+    Invoke-Step "Create storage folders" {
+        foreach ($path in @($storage.ProjectRoot, $storage.TftpRoot, $storage.RootfsRoot, $storage.Downloads, $storage.Logs, $storage.Tools)) {
             New-Item -ItemType Directory -Force -Path $path | Out-Null
         }
-        Get-ChildItem -Force D:\ | Select-Object Name,Mode,LastWriteTime | Format-Table -AutoSize
+        Get-ChildItem -Force $storage.ProjectRoot | Select-Object Name,Mode,LastWriteTime | Format-Table -AutoSize
     }
     Invoke-Step "Validate lab config and plan" {
         if (-not (Test-Path -LiteralPath $Config)) {
@@ -398,10 +458,14 @@ function Invoke-ServerSetup {
                 -Method windows-lite-nfs `
                 -ServerIp 10.73.0.10 `
                 -RouterIp 10.73.0.1 `
-                -ProjectRoot "D:\" `
-                -TftpRoot "D:\tftp" `
-                -RootfsRoot "D:\rootfs"
+                -ProjectRoot $storage.ProjectRoot `
+                -TftpRoot $storage.TftpRoot `
+                -RootfsRoot $storage.RootfsRoot `
+                -IscsiRoot $storage.IscsiRoot
             if ($LASTEXITCODE -ne 0) { throw "init failed" }
+        } elseif ($StorageRoot) {
+            Update-ConfigStorage $cfg $storage
+            $cfg | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $Config -Encoding UTF8
         }
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\rpi-win-netboot.ps1" generate -Config $Config -Out $Generated
         if ($LASTEXITCODE -ne 0) { throw "generate failed" }
@@ -410,182 +474,25 @@ function Invoke-ServerSetup {
     Invoke-Verify
 }
 
-function Invoke-InstallServices {
-    Assert-Admin
-    Invoke-Step "Install haneWIN DHCP/TFTP/NFS packages with winget" {
-        $packages = @(
-            "haneWIN.DHCPServer",
-            "haneWIN.TFTPServer",
-            "haneWIN.NFSServer"
-        )
-        foreach ($package in $packages) {
-            Write-Host "Installing/checking $package"
-            & winget install --id $package --exact --accept-package-agreements --accept-source-agreements
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "winget returned $LASTEXITCODE for $package. It may already be installed or the installer may have been cancelled." -ForegroundColor Yellow
-            }
-        }
-    }
-    Invoke-Firewall
-    Invoke-Step "Generated service configuration files" {
-        Write-Host "DHCP/TFTP profile:"
-        Write-Host (Resolve-Path "$Generated\windows\hanewin-dhcp-profile.md")
-        Write-Host "NFS export:"
-        Write-Host (Resolve-Path "$Generated\windows\hanewin-nfs-exports.txt")
-        Write-Host ""
-        Get-Content "$Generated\windows\hanewin-nfs-exports.txt"
-    }
-}
-
 function Invoke-LiteProviderStart {
     Invoke-Step "부팅 서비스 준비/시작" {
         Invoke-Tool "tools\lite-provider.ps1" @("start", "-Config", $Config)
     }
 }
 
-function Invoke-LiteProviderStop {
-    Invoke-Step "부팅 서비스 중지" {
-        Invoke-Tool "tools\lite-provider.ps1" @("stop", "-Config", $Config)
-    }
-}
-
-function Invoke-ConfigureServices {
-    Assert-Admin
-    $cfg = Read-ConfigObject
-    $serverIp = [string]$cfg.server_ip
-    $routerIp = [string]$cfg.router_ip
-    $tftpRoot = [string]$cfg.tftp_root
-    $rootfsRoot = [string]$cfg.nfs_root
-    $profileName = "If-1_0.10"
-    $dhcpDir = "C:\Program Files\dhcp"
-    $tftpReg = "HKLM\SOFTWARE\haneWIN\TFTPsrv"
-    $nfsReg = "HKLM\SOFTWARE\haneWIN\nfsd"
-
-    Invoke-Step "0. 서비스 설정 변경 준비" {
-        foreach ($serviceName in @("DHCPservice", "TFTPService", "NFSserver")) {
-            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-            if ($service -and $service.Status -ne "Stopped") {
-                Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
-                Write-Check "정상" $serviceName "설정 변경을 위해 잠시 중지했습니다."
-            } elseif ($service) {
-                Write-Check "정상" $serviceName "이미 중지 상태입니다."
-            } else {
-                Write-Check "주의" $serviceName "서비스가 설치되어 있지 않습니다."
-            }
-        }
-    }
-
-    Invoke-Step "1. DHCP를 이더넷 전용으로 설정" {
-        $iniPath = Join-Path $dhcpDir "DHCPsrv.ini"
-        if (-not (Test-Path -LiteralPath $iniPath)) {
-            throw "haneWIN DHCP 설정 파일을 찾을 수 없습니다: $iniPath"
-        }
-        $backup = Backup-File $iniPath
-        if ($backup) { Write-Check "정상" "DHCP 설정 백업" $backup }
-
-        $lines = @(
-            "[$profileName]",
-            "InterfaceIP=$serverIp",
-            "GatewayIP=$routerIp",
-            "DNS1IP=$routerIp",
-            "SubnetMask=255.255.255.0",
-            "BaseIP=10.73.0.200",
-            "Range=40",
-            "NextIP=$serverIp",
-            "BootName=$serverIp",
-            "UseOpt=1",
-            "DefaultOptions=43 32 6 1 3 10 4 0 80 88 69 9 20 0 0 17 82 97 115 112 98 101 114 114 121 32 80 105 32 66 111 111 116 255",
-            "SendOptions=43",
-            "",
-            "[DHCPsrv]",
-            "Profile0=$profileName",
-            "Used=1"
-        )
-        Set-Content -LiteralPath $iniPath -Value $lines -Encoding ASCII
-        Write-Check "정상" "DHCP 바인딩" "Wi-Fi 프로필 제거, 이더넷 $serverIp 전용"
-        Write-Check "정상" "DHCP 부팅 서버" "Next Server IP: $serverIp, Gateway/DNS: $routerIp"
-    }
-
-    Invoke-Step "2. 등록된 Pi 예약 IP 적용" {
-        $clients = @($cfg.clients)
-        $ethersPath = Join-Path $dhcpDir "ethers"
-        if (Test-Path -LiteralPath $ethersPath) {
-            $backup = Backup-File $ethersPath
-            if ($backup) { Write-Check "정상" "DHCP 예약 목록 백업" $backup }
-        }
-        $stamp = [DateTimeOffset]::Now.ToUnixTimeSeconds()
-        $etherLines = foreach ($client in $clients) {
-            $mac = [string]$client.mac
-            $ip = [string]$client.ip
-            if ($mac -and $ip) {
-                "$mac`t$ip`t:$stamp`t$profileName"
-            }
-        }
-        Set-Content -LiteralPath $ethersPath -Value $etherLines -Encoding ASCII
-
-        $dynamicPath = Join-Path $dhcpDir "dynamic"
-        if (Test-Path -LiteralPath $dynamicPath) {
-            $backup = Backup-File $dynamicPath
-            if ($backup) { Write-Check "정상" "DHCP 동적 임대 백업" $backup }
-            Set-Content -LiteralPath $dynamicPath -Value @() -Encoding ASCII
-        }
-        Write-Check "정상" "DHCP 정적 등록" "$($clients.Count)대 예약 IP 적용. 현재 테스트 Pi 88:a2:9e:4f:a9:b1은 10.73.0.155입니다."
-    }
-
-    Invoke-Step "3. TFTP root 설정" {
-        if (-not (Test-Path -LiteralPath $tftpRoot)) {
-            New-Item -ItemType Directory -Force -Path $tftpRoot | Out-Null
-        }
-        Invoke-RegAdd $tftpReg "RootDirectory" "REG_SZ" $tftpRoot
-        Invoke-RegAdd $tftpReg "Address" "REG_SZ" $serverIp
-        Invoke-RegAdd $tftpReg "Port" "REG_DWORD" "69"
-        Write-Check "정상" "TFTP root" "$tftpRoot"
-        Write-Check "정상" "TFTP 바인딩" "${serverIp}:69"
-    }
-
-    Invoke-Step "4. NFS export 설정" {
-        $exports = "C:\Program Files\nfsd\exports"
-        if (-not (Test-Path -LiteralPath (Split-Path -Parent $exports))) {
-            throw "haneWIN NFS 폴더를 찾을 수 없습니다: $(Split-Path -Parent $exports)"
-        }
-        if (-not (Test-Path -LiteralPath $rootfsRoot)) {
-            New-Item -ItemType Directory -Force -Path $rootfsRoot | Out-Null
-        }
-        if (Test-Path -LiteralPath $exports) {
-            $backup = Backup-File $exports
-            if ($backup) { Write-Check "정상" "NFS exports 백업" $backup }
-        }
-        $exportLines = @(
-            "# Generated by RPI Netboot Manager",
-            "# Raspberry Pi root filesystems are exported as /rpi/<serial>.",
-            "$rootfsRoot -name:rpi -alldirs -i32 -maproot:0:0"
-        )
-        Set-Content -LiteralPath $exports -Value $exportLines -Encoding ASCII
-        Invoke-RegAdd $nfsReg "SaveAttr" "REG_DWORD" "1"
-        Write-Check "정상" "NFS export" "$rootfsRoot -> /rpi"
-        Write-Check "정상" "NFS NTFS 속성" "uid/gid/권한 저장 옵션 활성화"
-    }
-
-    Invoke-Step "5. 서비스 재시작" {
-        Restart-LabService "DHCPservice"
-        Restart-LabService "TFTPService"
-        Restart-LabService "NFSserver"
-    }
-
-    Invoke-Verify
-}
-
 function Invoke-PrepareRpi4EepromSd {
     Assert-Admin
+    $cfg = if (Test-Path -LiteralPath $Config) { Read-ConfigObject } else { $null }
+    $cache = Get-ProjectDownloadCache
     Invoke-Step "List disks before writing SD" {
-        Invoke-Tool "tools\rpi-sd-card.ps1" @("list")
+        Invoke-Tool "tools\rpi-sd-card.ps1" @("list", "-CacheDir", $cache)
     }
     if (-not (Confirm-Destructive "This will erase the SD card at drive $SdDriveLetter`: and write the Raspberry Pi 4 network-boot EEPROM image. Zero 2 W is not a netboot target.")) {
         Write-Host "Cancelled."
         return
     }
     Invoke-Step "Write Raspberry Pi 4 EEPROM network boot image to SD" {
-        Invoke-Tool "tools\rpi-sd-card.ps1" @("prepare-eeprom-network", "-Model", "pi4", "-DriveLetter", $SdDriveLetter, "-IUnderstand")
+        Invoke-Tool "tools\rpi-sd-card.ps1" @("prepare-eeprom-network", "-Model", "pi4", "-DriveLetter", $SdDriveLetter, "-CacheDir", $cache, "-IUnderstand")
     }
 }
 
@@ -668,19 +575,11 @@ function Show-Menu {
         Write-Host ""
         Write-Host "1. Status / current state"
         Write-Host "2. Setup Windows server PC for 10.73 netboot"
-        Write-Host "3. Start free Lite provider (built-in DHCP/TFTP + WinNFSd)"
-        Write-Host "4. Stop free Lite provider"
-        Write-Host "5. Install haneWIN trial DHCP/TFTP/NFS tools"
-        Write-Host "6. Configure haneWIN boot service settings"
-        Write-Host "7. Prepare RPi4 Network Boot EEPROM SD card"
-        Write-Host "8. Copy first Pi boot partition files to TFTP"
-        Write-Host "9. Prepare RPi4 netboot rootfs helper"
-        Write-Host "10. Prepare Zero 2 W SD boot + USB gadget SD"
-        Write-Host "11. Verify lab / services / generated files"
-        Write-Host "12. Sync generated TFTP files to D:\tftp"
-        Write-Host "13. Apply Windows firewall rules"
-        Write-Host "14. Restore Ethernet DHCP"
-        Write-Host "15. Show docs"
+        Write-Host "3. Start boot services"
+        Write-Host "4. Prepare RPi4 Network Boot EEPROM SD card"
+        Write-Host "5. Prepare Zero 2 W SD boot + USB gadget SD"
+        Write-Host "6. Verify lab / services / generated files"
+        Write-Host "7. Show docs"
         Write-Host "0. Exit"
         Write-Host ""
         $choice = Read-Host "Select"
@@ -689,18 +588,10 @@ function Show-Menu {
                 "1" { Show-Status }
                 "2" { Invoke-ServerSetup }
                 "3" { Invoke-LiteProviderStart }
-                "4" { Invoke-LiteProviderStop }
-                "5" { Invoke-InstallServices }
-                "6" { Invoke-ConfigureServices }
-                "7" { Invoke-PrepareRpi4EepromSd }
-                "8" { Invoke-CopyBootFiles }
-                "9" { Invoke-PrepareRpi4Rootfs }
-                "10" { Invoke-PrepareZero2WGadgetSd }
-                "11" { Invoke-Verify }
-                "12" { Invoke-SyncTftp }
-                "13" { Invoke-Firewall }
-                "14" { Invoke-RestoreNetwork }
-                "15" { Open-Docs }
+                "4" { Invoke-PrepareRpi4EepromSd }
+                "5" { Invoke-PrepareZero2WGadgetSd }
+                "6" { Invoke-Verify }
+                "7" { Open-Docs }
                 "0" { return }
                 default { Write-Host "Unknown selection." -ForegroundColor Yellow }
             }
@@ -718,18 +609,10 @@ switch ($Task) {
     "status" { Show-Status }
     "server-setup" { Invoke-ServerSetup }
     "lite-provider-start" { Invoke-LiteProviderStart }
-    "lite-provider-stop" { Invoke-LiteProviderStop }
-    "install-services" { Invoke-InstallServices }
-    "configure-services" { Invoke-ConfigureServices }
     "prepare-rpi4-eeprom-sd" { Invoke-PrepareRpi4EepromSd }
     "prepare-sd" { Invoke-PrepareSd }
-    "copy-boot" { Invoke-CopyBootFiles }
-    "prepare-rpi4-rootfs" { Invoke-PrepareRpi4Rootfs }
     "prepare-zero2w-gadget-sd" { Invoke-PrepareZero2WGadgetSd }
     "verify" { Invoke-Verify }
-    "sync-tftp" { Invoke-SyncTftp }
-    "firewall" { Invoke-Firewall }
-    "restore-network" { Invoke-RestoreNetwork }
     "docs" { Open-Docs }
 }
 

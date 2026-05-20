@@ -17,3 +17,12 @@
 - 15:45 - Added Device ID based GUI flow. `rpi-001` now becomes hostname plus `/etc/rpi-netboot/client.json` metadata for cloned RPi4 rootfs.
 - 16:20 - Cleaned the executable UI to show only operational actions; diagnostic/provider experiment buttons were removed from the WinForms surface.
 - 17:20 - Audited `D:\` storage. Pruned the committed lab config from the old 60-device plan down to the proven `d80c0b88` RPi4 and updated status checks to flag stale storage folders instead of recreating iSCSI/backups/templates.
+
+## 2026-05-20
+
+- 11:35 - Reworked the WinForms UI after user feedback: removed `권장 순서` and `자동화 UI 빌드`, improved spacing, button sizing, palette, and Korean font fallback.
+- 11:40 - Confirmed the active workspace is `rpi-pxe-manager\windows`; the old `rpi-netboot-windows` launcher exe was removed locally to avoid confusion.
+- 11:45 - Confirmed only one executable/batch surface remains across active + legacy workspace: `windows\RPI-Netboot-Manager.exe`.
+- 14:05 - Verified Pi 4 Network Boot EEPROM image download and moved the EEPROM cache into `windows\cache\downloads`.
+- 14:12 - Confirmed current `S:` is `Disk 3`, USB, 29.72 GB, `bootfs` FAT32. It is safe from boot/system disk checks but will be erased if EEPROM write is run.
+- 14:20 - Documented clone order: EEPROM SD is a one-time bootloader update; new RPi4 still needs serial/MAC confirmation before `새 RPi4 등록/복제`.

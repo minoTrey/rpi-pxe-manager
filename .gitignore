@@ -38,6 +38,7 @@ __pycache__/
 
 # Windows build artifacts
 windows/*.exe
+windows/cache/
 windows/cache-os-list.json
 windows/generated/
 windows/format-d-ntfs.log

@@ -9,7 +9,7 @@ param(
     [int] $DiskNumber = -1,
     [string] $DriveLetter = "",
     [string] $Image = "",
-    [string] $CacheDir = "D:\downloads",
+    [string] $CacheDir = "",
     [string] $OsListUrl = "https://downloads.raspberrypi.com/os_list_imagingutility_v4.json",
     [int] $MaxDiskSizeGB = 64,
 
@@ -20,6 +20,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($CacheDir)) {
+    $CacheDir = Join-Path (Split-Path -Parent $PSScriptRoot) "cache\downloads"
+}
 
 function Assert-Admin {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
