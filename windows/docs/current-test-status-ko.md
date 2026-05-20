@@ -1,6 +1,6 @@
 # 현재 테스트 상태
 
-마지막 업데이트: 2026-05-20 17:14 KST
+마지막 업데이트: 2026-05-20 17:34 KST
 
 ## 결론
 
@@ -53,6 +53,8 @@ C:\Users\test\Documents\workspace\rpi-pxe-manager\windows\RPI-Netboot-Manager.ex
 - GUI 기본 SD 작업을 `RPi4 EEPROM SD`에서 `RPi4 OS SD 작성`으로 바꿨다.
 - 기본 OS 이미지는 `2026-04-21-raspios-trixie-arm64-lite.img`이다.
 - `저장소 설정`과 `저장소 열기` 버튼은 이제 `서버 PC 준비` 화면에서만 보인다.
+- SD 검증이 오래 걸리던 원인은 PowerShell 바이트 단위 비교였다. C# 버퍼 비교 helper와 `verify-image` 명령으로 수정했다.
+- Disk 3 OS SD는 이미지와 일치하는 것으로 검증 완료했다.
 
 ## OS SD 상태
 
@@ -71,7 +73,7 @@ powershell -File tools\rpi-sd-card.ps1 download-rpios-lite-trixie -CacheDir .\wi
 Source: cache
 ```
 
-현재 Windows 디스크 후보:
+현재 Windows 디스크 상태:
 
 ```text
 Disk 3
@@ -79,11 +81,18 @@ Generic STORAGE DEVICE
 USB
 29.72 GB
 MBR
+Partition 1: FAT32 XINT13, 512 MiB, bootfs
+Partition 2: Unknown, 2.5 GiB, Linux rootfs
 IsBoot: false
 IsSystem: false
 ```
 
-주의: 이 디스크를 선택하고 쓰기를 진행하면 전체 내용이 지워진다.
+검증:
+
+```text
+powershell -File tools\rpi-sd-card.ps1 verify-image -DiskNumber 3 -Image .\windows\cache\downloads\2026-04-21-raspios-trixie-arm64-lite.img
+Image verification completed.
+```
 
 ## EEPROM SD 참고
 
@@ -112,7 +121,7 @@ SHA256 43639F3D17C53D47C1E54D6B6C9229BB095014A15A93BD948717B45343EA22F7
 
 ## 다음 액션
 
-1. 새 GUI를 실행한다.
-2. `RPi4 OS SD 작성` 버튼의 구조와 확인 문구를 점검한다.
-3. 사용자가 직접 디스크를 선택하고 쓰기 버튼을 누르는 과정을 모니터링한다.
-4. 쓰기 후 Disk 3 파티션/볼륨 상태를 확인한다.
+1. Disk 3을 안전하게 꺼낸다.
+2. 새 RPi4를 OS SD로 부팅한다.
+3. RPi OS에서 serial/MAC과 EEPROM/network boot order를 확인한다.
+4. GUI에서 `새 RPi4 등록/복제`를 진행한다.

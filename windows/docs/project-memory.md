@@ -1,6 +1,6 @@
 # Project Memory
 
-Last updated: 2026-05-20 17:14 KST
+Last updated: 2026-05-20 17:34 KST
 
 ## Goal
 
@@ -89,6 +89,8 @@ Meaning:
 - Changed the GUI default SD flow from EEPROM SD writing to Raspberry Pi OS SD writing.
 - Pinned the OS SD image to `2026-04-21-raspios-trixie-arm64-lite.img` (Raspberry Pi OS Lite 64-bit Trixie).
 - Scoped `저장소 설정` and `저장소 열기` to `서버 PC 준비` only; other task screens now show only their primary task action.
+- Fixed the SD verifier performance bug by moving block comparison into a compiled C# helper and adding `verify-image`.
+- Verified Disk 3 against `2026-04-21-raspios-trixie-arm64-lite.img` after the GUI write.
 
 ## OS SD Checkpoint
 
@@ -114,7 +116,21 @@ windows\cache\downloads\rpi-boot-eeprom-recovery-2026-01-09-2711-vl805-000138c0-
 SHA256 43639F3D17C53D47C1E54D6B6C9229BB095014A15A93BD948717B45343EA22F7
 ```
 
-Status: EEPROM SD write completed earlier, but the active UI flow now writes Raspberry Pi OS SD instead. Current disk listing shows the SD readers as `RAW 0 B`, so no writable card is currently inserted in Windows.
+Verified written target:
+
+```text
+Disk 3
+Generic STORAGE DEVICE
+USB
+29.72 GB
+MBR
+Partition 1: FAT32 XINT13, 512 MiB, bootfs
+Partition 2: Unknown, 2.5 GiB, Linux rootfs
+IsBoot: false
+IsSystem: false
+```
+
+Status: OS SD write is complete and `verify-image` passed. The earlier GUI-side error/stall was caused by the old byte-by-byte PowerShell verifier, not by a bad image write.
 
 ## Clone Flow
 
@@ -146,14 +162,12 @@ Known limitation:
 
 ## Next Work
 
-1. Insert a real SD card in Windows; current readers show `RAW 0 B`.
-2. Use GUI `RPi4 OS SD 작성` and select the physical SD disk.
-3. Boot the target RPi4 from the OS SD.
-4. Confirm target Pi serial/MAC and EEPROM/network boot order.
-5. Register/clone the new RPi4.
-6. Restart boot services if reservations changed.
-7. Test SD-less netboot.
-8. Improve clone dialog to surface unknown MAC candidates from `D:\logs\rpi-boot-lite.log`.
+1. Eject Disk 3 cleanly and boot the target RPi4 from the OS SD.
+2. Confirm target Pi serial/MAC and EEPROM/network boot order.
+3. Register/clone the new RPi4.
+4. Restart boot services if reservations changed.
+5. Test SD-less netboot.
+6. Improve clone dialog to surface unknown MAC candidates from `D:\logs\rpi-boot-lite.log`.
 
 ## Operating Rule
 

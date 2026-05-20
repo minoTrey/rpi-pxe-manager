@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-20T17:14:00+09:00",
+  "updatedAt": "2026-05-20T17:34:00+09:00",
   "nodes": [
     { "id": "server-pc", "type": "machine", "label": "Windows server PC", "ip": "10.73.0.10" },
     { "id": "router", "type": "network", "label": "ipTIME router", "ip": "10.73.0.1" },
@@ -15,12 +15,13 @@
     { "id": "download-cache", "type": "artifact", "label": "windows/cache/downloads project download cache" },
     { "id": "rpios-trixie-image", "type": "artifact", "label": "2026-04-21 Raspberry Pi OS Lite 64-bit Trixie image" },
     { "id": "eeprom-cache", "type": "artifact", "label": "Pi 4 EEPROM image retained for CLI fallback" },
-    { "id": "sd-disk3", "type": "media", "label": "Disk 3 USB SD candidate, 29.72GB MBR, not boot/system" },
+    { "id": "sd-disk3", "type": "media", "label": "Disk 3 verified Raspberry Pi OS Lite Trixie SD, 29.72GB MBR" },
     { "id": "sd-selector", "type": "tool", "label": "GUI physical disk selector for SD image writes" },
     { "id": "hanewin-cleanup", "type": "event", "label": "haneWIN services and install folders removed" },
     { "id": "legacy-workspace", "type": "workspace", "label": "rpi-netboot-windows legacy snapshot" },
     { "id": "active-workspace", "type": "workspace", "label": "rpi-pxe-manager/windows active workspace" },
-    { "id": "d-downloads-cleanup", "type": "event", "label": "D:/downloads moved into project cache and emptied" }
+    { "id": "d-downloads-cleanup", "type": "event", "label": "D:/downloads moved into project cache and emptied" },
+    { "id": "fast-sd-verify", "type": "tool", "label": "rpi-sd-card.ps1 verify-image with compiled C# buffer compare" }
   ],
   "edges": [
     { "from": "server-pc", "to": "router", "type": "connected_to" },
@@ -34,6 +35,8 @@
     { "from": "gui-manager", "to": "clone-script", "type": "wraps" },
     { "from": "gui-manager", "to": "sd-selector", "type": "opens_before_sd_write" },
     { "from": "gui-manager", "to": "rpios-trixie-image", "type": "writes_by_default" },
+    { "from": "fast-sd-verify", "to": "sd-disk3", "type": "verified" },
+    { "from": "fast-sd-verify", "to": "rpios-trixie-image", "type": "compared_against" },
     { "from": "rpios-trixie-image", "to": "download-cache", "type": "stored_in" },
     { "from": "eeprom-cache", "to": "download-cache", "type": "stored_in" },
     { "from": "sd-selector", "to": "sd-disk3", "type": "can_select" },

@@ -1,6 +1,6 @@
 param(
     [Parameter(Position = 0, Mandatory = $true)]
-    [ValidateSet("list", "download-eeprom-network", "prepare-eeprom-network", "download-rpios-lite-trixie", "prepare-rpios-lite-trixie", "write-image")]
+    [ValidateSet("list", "download-eeprom-network", "prepare-eeprom-network", "download-rpios-lite-trixie", "prepare-rpios-lite-trixie", "write-image", "verify-image")]
     [string] $Command,
 
     [ValidateSet("pi4", "pi5")]
@@ -39,6 +39,27 @@ function Format-Bytes {
     if ($Value -ge 1GB) { return "{0:n2} GB" -f ($Value / 1GB) }
     if ($Value -ge 1MB) { return "{0:n2} MB" -f ($Value / 1MB) }
     return "$Value B"
+}
+
+function Ensure-BufferComparer {
+    if ("RpiSdCard.BufferComparer" -as [type]) {
+        return
+    }
+
+    Add-Type -TypeDefinition @"
+namespace RpiSdCard {
+    public static class BufferComparer {
+        public static bool Equals(byte[] left, byte[] right, int count) {
+            if (left == null || right == null) return false;
+            if (count < 0 || count > left.Length || count > right.Length) return false;
+            for (int i = 0; i < count; i++) {
+                if (left[i] != right[i]) return false;
+            }
+            return true;
+        }
+    }
+}
+"@
 }
 
 function Get-RpiSdDiskRows {
@@ -368,6 +389,7 @@ function Verify-RawImage {
         [Parameter(Mandatory = $true)] $Disk
     )
 
+    Ensure-BufferComparer
     $source = [IO.File]::Open($ImagePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     $targetPath = "\\.\PhysicalDrive$($Disk.Number)"
     $target = [IO.File]::Open($targetPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
@@ -381,10 +403,8 @@ function Verify-RawImage {
             if ($targetRead -ne $read) {
                 throw "Verification failed: target ended early at $(Format-Bytes $checked)."
             }
-            for ($i = 0; $i -lt $read; $i++) {
-                if ($left[$i] -ne $right[$i]) {
-                    throw "Verification failed at byte offset $($checked + [UInt64]$i)."
-                }
+            if (-not [RpiSdCard.BufferComparer]::Equals($left, $right, $read)) {
+                throw "Verification failed in block starting at byte offset $checked."
             }
             $checked += [UInt64]$read
             $percent = if ($total -gt 0) { [int](($checked * 100) / $total) } else { 0 }
@@ -426,6 +446,26 @@ function Invoke-WriteImageCommand {
     Write-Host "Image write completed."
 }
 
+function Invoke-VerifyImageCommand {
+    param([string] $RequestedImage)
+
+    Assert-Admin
+    if ([string]::IsNullOrWhiteSpace($RequestedImage)) {
+        throw "verify-image requires -Image."
+    }
+    $imagePath = Expand-ImageIfNeeded $RequestedImage
+    $imageSize = [UInt64](Get-Item -LiteralPath $imagePath).Length
+    $disk = Resolve-TargetDisk
+    if ($imageSize -gt [UInt64]$disk.Size) {
+        throw "Image size $(Format-Bytes $imageSize) is larger than disk size $(Format-Bytes ([UInt64]$disk.Size))."
+    }
+
+    Write-Host "Target: PhysicalDrive$($disk.Number) $($disk.FriendlyName) $(Format-Bytes ([UInt64]$disk.Size))"
+    Write-Host "Image:  $imagePath $(Format-Bytes $imageSize)"
+    Verify-RawImage -ImagePath $imagePath -Disk $disk
+    Write-Host "Image verification completed."
+}
+
 switch ($Command) {
     "list" {
         Get-RpiSdDiskRows | Format-Table -AutoSize
@@ -446,5 +486,8 @@ switch ($Command) {
     }
     "write-image" {
         Invoke-WriteImageCommand $Image
+    }
+    "verify-image" {
+        Invoke-VerifyImageCommand $Image
     }
 }

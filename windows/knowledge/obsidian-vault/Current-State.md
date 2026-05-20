@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-05-20 17:14 KST
+Updated: 2026-05-20 17:34 KST
 
 ## Active Workspace
 
@@ -54,6 +54,8 @@ Interpretation:
 - GUI default SD flow now writes Raspberry Pi OS, not EEPROM.
 - The pinned image is `2026-04-21-raspios-trixie-arm64-lite.img`.
 - `저장소 설정` and `저장소 열기` now appear only on `서버 PC 준비`, not on every task screen.
+- The old PowerShell byte-by-byte verifier was too slow and looked like an error/stall. It is now replaced with a compiled C# buffer comparer plus `verify-image`.
+- Disk 3 was verified against the pinned OS image after the GUI write.
 
 Default GUI SD image:
 
@@ -63,7 +65,7 @@ Raspberry Pi OS Lite 64-bit Trixie
 Image size: 3.01 GB
 ```
 
-Current SD candidate from `rpi-sd-card.ps1 list`:
+Current written SD state:
 
 ```text
 Disk 3
@@ -71,6 +73,8 @@ Generic STORAGE DEVICE
 USB
 29.72 GB
 MBR
+Partition 1: FAT32 XINT13, 512 MiB, bootfs
+Partition 2: Unknown, 2.5 GiB, Linux rootfs
 not boot/system
 ```
 
@@ -117,6 +121,7 @@ Potential next UX improvement:
 
 ## Next Move
 
-1. Commit and push the OS SD UI restructure.
-2. Launch the rebuilt GUI.
-3. Watch the user-driven SD write flow and inspect disk state after the write.
+1. Eject Disk 3 cleanly.
+2. Boot the target RPi4 from the verified OS SD.
+3. Confirm serial/MAC and EEPROM/network boot order.
+4. Continue with `새 RPi4 등록/복제`.
