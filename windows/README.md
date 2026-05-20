@@ -25,8 +25,8 @@ RPI-Netboot-Manager.exe
 1. 상태 확인
 2. 서버 PC 준비
 3. 부팅 서비스 시작
-4. 새 RPi4 등록/복제
-5. RPi4 EEPROM SD
+4. RPi4 OS SD 작성
+5. 새 RPi4 등록/복제
 6. Zero 2 W Gadget SD
 7. 도움말
 ```
@@ -41,8 +41,8 @@ ipTIME/router:  10.73.0.1
 저장소 루트:     GUI의 저장소 설정에서 선택
 TFTP root:      <저장소>\tftp
 rootfs root:    <저장소>\rootfs
-downloads:      <저장소>\downloads
-SD 카드:        S:
+downloads:      windows\cache\downloads
+SD 카드:        물리 디스크 선택
 ```
 
 ## 주요 화면
@@ -52,7 +52,7 @@ SD 카드:        S:
 서버 PC 준비
 부팅 서비스 시작
 새 RPi4 등록/복제
-RPi4 EEPROM SD
+RPi4 OS SD 작성
 Zero 2 W Gadget SD
 도움말
 ```

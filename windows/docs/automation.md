@@ -25,7 +25,7 @@ RPI-Netboot-Manager.exe
 서버 PC 준비
 부팅 서비스 시작
 새 RPi4 등록/복제
-RPi4 EEPROM SD
+RPi4 OS SD 작성
 Zero 2 W Gadget SD
 도움말
 ```
@@ -38,7 +38,7 @@ Zero 2 W Gadget SD
 4. `부팅 서비스 시작` 버튼으로 RPi4 부팅 서비스 실행
 5. `새 RPi4 등록/복제`로 기기 번호, 시리얼, MAC 입력
 6. 새 RPi4 전원을 다시 넣어 네트워크 부팅 확인
-7. 필요하면 `RPi4 EEPROM SD` 또는 `Zero 2 W Gadget SD` 실행
+7. 필요하면 `RPi4 OS SD 작성` 또는 `Zero 2 W Gadget SD` 실행
 
 ## 자동화된 항목
 
@@ -49,8 +49,8 @@ Zero 2 W Gadget SD
 - `lab-10.73.json`의 등록 RPi4 확인
 - TFTP `cmdline.txt/config.txt` 검사
 - Windows 방화벽 규칙 적용
-- Raspberry Pi 공식 목록에서 Pi 4 Network Boot EEPROM 이미지 다운로드
-- SD카드에 EEPROM 이미지 쓰기 및 검증
+- 프로젝트 캐시의 Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지 확인
+- 선택한 SD카드에 OS 이미지 쓰기 및 검증
 - 내장 DHCP/TFTP 서버 `RpiBootServiceLite.exe` 빌드
 - rootfs 서비스 시작
 - 새 RPi4 bootfs/rootfs 복제와 client metadata 생성

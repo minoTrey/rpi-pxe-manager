@@ -14,7 +14,7 @@
 - `lab-10.73.json` 기반 랩 설정.
 - RPi4별 `<저장소>\tftp\<serial>` 및 `<저장소>\rootfs\<serial>` 구조.
 - 한글 GUI 실행 파일 `RPI-Netboot-Manager.exe`.
-- RPi4 EEPROM SD 준비 기능.
+- RPi4 OS SD 작성 기능.
 - Zero 2 W gadget SD 준비 기능.
 - 새 RPi4 등록/복제 기능.
 - 상태 점검, 서버 PC 준비, 부팅 서비스 시작 작업.
@@ -25,8 +25,8 @@
 2. `상태 확인`으로 PC, 저장소, 네트워크, 서비스 상태 확인.
 3. 문제가 있으면 `서버 PC 준비` 실행.
 4. `부팅 서비스 시작` 실행.
-5. `RPi4 EEPROM SD`로 EEPROM SD 준비.
-6. 첫 RPi4의 serial/MAC 확인.
+5. `RPi4 OS SD 작성`으로 Raspberry Pi OS Lite 64-bit Trixie SD 준비.
+6. OS SD로 부팅한 RPi4의 serial/MAC 확인.
 7. 첫 RPi4의 bootfs를 `<저장소>\tftp\<serial>`에 준비.
 8. 첫 RPi4의 rootfs를 `<저장소>\rootfs\<serial>`에 준비.
 9. RPi4 전원을 다시 넣어 DHCP, TFTP, rootfs 부팅 흐름 확인.

@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-05-20 16:35 KST
+Updated: 2026-05-20 17:14 KST
 
 ## Active Workspace
 
@@ -16,7 +16,7 @@ Use this executable:
 C:\Users\test\Documents\workspace\rpi-pxe-manager\windows\RPI-Netboot-Manager.exe
 ```
 
-Do not use `C:\Users\test\Documents\workspace\rpi-netboot-windows` for active work. It is a legacy snapshot. Its old launcher exe was removed locally; the folder is only reference material.
+Do not use `C:\Users\test\Documents\workspace\rpi-netboot-windows` for active work. It is a legacy snapshot.
 
 ## Lab
 
@@ -25,7 +25,7 @@ Do not use `C:\Users\test\Documents\workspace\rpi-netboot-windows` for active wo
 - Current storage root: `D:\`
 - TFTP root: `D:\tftp`
 - Rootfs root: `D:\rootfs`
-- Downloads/cache for EEPROM images: `windows\cache\downloads`
+- Project download cache: `windows\cache\downloads`
 - Known-good RPi4 MAC: `88:a2:9e:4f:a9:b1`
 - Known-good RPi4 serial: `d80c0b88`
 - Known-good RPi4 IP: `10.73.0.155`
@@ -44,43 +44,25 @@ attempt: 20260519-144335-d80c0b88-hanewin-systemd-explicit
 Interpretation:
 
 - The first Raspberry Pi 4 reached userspace from the Windows-hosted bootfs/rootfs pair.
-- This proves the lab network, EEPROM setting, TFTP prefix, bootfs, rootfs, and minimal NFS root command line are coherent.
-- haneWIN remains proof-only and must not be treated as the production provider.
+- haneWIN remains proof-only and has been removed from this PC.
+- Current production-candidate service path is `RpiBootServiceLite` plus project-local `WinNFSd`.
 
-## 2026-05-20 UI And Packaging State
+## 2026-05-20 UI And SD State
 
-The WinForms GUI was cleaned again after user feedback.
+- GUI cleanup and physical-disk selection were added.
+- `D:\downloads` was emptied into `windows\cache\downloads`.
+- GUI default SD flow now writes Raspberry Pi OS, not EEPROM.
+- The pinned image is `2026-04-21-raspios-trixie-arm64-lite.img`.
 
-- Removed sidebar `권장 순서` and `자동화 UI 빌드`.
-- Removed haneWIN/evaluation/provider experiment wording from the executable-facing UI.
-- Improved the visual hierarchy, spacing, button sizes, and font fallback.
-- Font fallback order is now Pretendard, Noto Sans KR, Noto Sans CJK KR, 맑은 고딕, Malgun Gothic, Segoe UI.
-- The GUI exposes storage selection; storage is not assumed to always be `D:\`.
-- Help/document buttons were collapsed into one `도움말` action.
-- Build output is only `RPI-Netboot-Manager.exe`; admin/bat launcher clutter was removed.
-
-Verification:
-
-- `windows\gui\build-gui.ps1` succeeded.
-- Actual GUI screenshot check passed for the clone screen with no obvious text clipping/overlap.
-- Recursive executable/batch check across active + legacy workspace found only:
-  `C:\Users\test\Documents\workspace\rpi-pxe-manager\windows\RPI-Netboot-Manager.exe`
-
-## EEPROM SD State
-
-The Pi 4 Network Boot EEPROM image is cached inside the project:
+Default GUI SD image:
 
 ```text
-windows\cache\downloads\rpi-boot-eeprom-recovery-2026-01-09-2711-vl805-000138c0-network\
+windows\cache\downloads\2026-04-21-raspios-trixie-arm64-lite.img
+Raspberry Pi OS Lite 64-bit Trixie
+Image size: 3.01 GB
 ```
 
-Image hash:
-
-```text
-SHA256 43639F3D17C53D47C1E54D6B6C9229BB095014A15A93BD948717B45343EA22F7
-```
-
-Current SD observation after writing:
+Current SD candidate from `rpi-sd-card.ps1 list`:
 
 ```text
 Disk 3
@@ -88,17 +70,15 @@ Generic STORAGE DEVICE
 USB
 29.72 GB
 MBR
-Partition 1: FAT32 XINT13, 256 MiB
 not boot/system
 ```
 
-Status: EEPROM SD write completed from the GUI after the disk-selection flow was added. The GUI now requires choosing a physical disk and no longer assumes `S:`.
+Previous EEPROM image remains cached for CLI fallback:
 
-Evidence:
-
-- `powershell -File tools\rpi-sd-card.ps1 list`
-- `Get-Disk -Number 3`
-- `Get-Partition -DiskNumber 3`
+```text
+windows\cache\downloads\rpi-boot-eeprom-recovery-2026-01-09-2711-vl805-000138c0-network\
+SHA256 43639F3D17C53D47C1E54D6B6C9229BB095014A15A93BD948717B45343EA22F7
+```
 
 ## Provider Cleanup
 
@@ -107,7 +87,7 @@ haneWIN is no longer installed on this PC.
 - Removed services: `DHCPservice`, `TFTPService`, `NFSserver`, `PMAPDaemon`
 - Removed folders: `C:\Program Files\dhcp`, `C:\Program Files\tftp`, `C:\Program Files\nfsd`, `D:\tools\rpi-netboot\hanewin-portable`
 - Cleanup log: `D:\logs\hanewin-cleanup-20260520-1625.log`
-- Preserved proof logs: `D:\logs\hanewin-portable.stdout.log`, `D:\logs\hanewin-portable.stderr.log`, and netboot harness evidence
+- Preserved proof logs: `D:\logs\hanewin-portable.stdout.log`, `D:\logs\hanewin-portable.stderr.log`
 
 Current boot services:
 
@@ -118,32 +98,24 @@ WinNFSd PID 11120: NFS 111/2049 on 10.73.0.10
 
 ## Clone Flow
 
-Current implementation still needs manual serial and MAC input.
-
 Recommended operator flow:
 
-1. Use `RPi4 EEPROM SD` to write the Pi 4 network boot EEPROM SD.
-2. Boot the target RPi4 once from that EEPROM SD.
-3. Power off and remove the SD after EEPROM update.
-4. Confirm the target Pi serial and MAC.
-   - Serial: `cat /proc/cpuinfo | grep Serial`; use the last 8 hex chars.
-   - MAC: `cat /sys/class/net/eth0/address`.
-   - The DHCP/TFTP log can reveal unknown MACs, but not reliably the serial.
-5. In GUI, run `새 RPi4 등록/복제`.
-6. Enter device id, serial, MAC, optional IP.
-7. Run `부팅 서비스 시작` again so DHCP reservations reload.
-8. Boot the new RPi4 with SD removed and Ethernet connected.
+1. Use `RPi4 OS SD 작성` to write Raspberry Pi OS Lite 64-bit Trixie to an SD card.
+2. Boot the target RPi4 from that OS SD.
+3. Confirm serial and MAC from Raspberry Pi OS.
+4. Update EEPROM/network boot order from the OS if needed.
+5. Run `새 RPi4 등록/복제` in the GUI.
+6. Restart boot services if DHCP reservations changed.
+7. Remove SD and test Ethernet netboot.
 
 Potential next UX improvement:
 
 - Parse `D:\logs\rpi-boot-lite.log` for `DHCP ignored unknown MAC ...`.
 - Show unknown MAC candidates in the clone dialog.
-- Serial still needs user confirmation unless the Pi reports it through a booted OS or a future provisioning helper.
+- Serial still needs user confirmation unless a future provisioning helper reports it.
 
 ## Next Move
 
-1. Boot the target RPi4 once from the completed EEPROM SD.
-2. Power off the target RPi4 and remove the SD.
-3. Confirm target RPi4 serial/MAC.
-4. Register and clone a new RPi4 from golden `d80c0b88`.
-5. Restart boot services if reservations changed and test SD-less network boot.
+1. Commit and push the OS SD UI restructure.
+2. Launch the rebuilt GUI.
+3. Watch the user-driven SD write flow and inspect disk state after the write.

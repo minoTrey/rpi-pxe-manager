@@ -18,7 +18,7 @@
 - `서버 PC 준비`: 저장소 폴더 구조, 이더넷 IP, lab 설정 확인
 - `부팅 서비스 시작`: RPi4 네트워크 부팅에 필요한 DHCP/TFTP/rootfs 서비스를 시작
 - `새 RPi4 등록/복제`: 기기 번호, 시리얼, MAC을 입력해 새 RPi4 bootfs/rootfs 생성
-- `RPi4 EEPROM SD`: S: SD카드에 Pi 4 Network Boot EEPROM 이미지 쓰기
+- `RPi4 OS SD 작성`: 선택한 물리 SD 디스크에 Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지 쓰기
 - `Zero 2 W Gadget SD`: S: SD카드를 Zero 2 W USB Ethernet gadget 부팅용으로 패치
 - `도움말`: 운영 절차와 복제 Runbook 열기
 
@@ -27,8 +27,8 @@
 1. `상태 확인`
 2. 문제가 있으면 `서버 PC 준비`
 3. `부팅 서비스 시작`
-4. `새 RPi4 등록/복제`
-5. 필요한 경우 `RPi4 EEPROM SD`
+4. 필요한 경우 `RPi4 OS SD 작성`
+5. `새 RPi4 등록/복제`
 6. 필요한 경우 `Zero 2 W Gadget SD`
 
 진단용 provider와 과거 실패 기록은 `docs/`, `knowledge/`에 보존하지만 실행파일 표면에는 운영자가 눌러야 하는 흐름만 둔다.

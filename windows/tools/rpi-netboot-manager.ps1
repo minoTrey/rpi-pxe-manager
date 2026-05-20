@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet("menu", "status", "server-setup", "lite-provider-start", "prepare-rpi4-eeprom-sd", "prepare-sd", "prepare-zero2w-gadget-sd", "verify", "docs")]
+    [ValidateSet("menu", "status", "server-setup", "lite-provider-start", "prepare-rpi4-os-sd", "prepare-rpi4-eeprom-sd", "prepare-sd", "prepare-zero2w-gadget-sd", "verify", "docs")]
     [string] $Task = "menu",
 
     [string] $Config = ".\lab-10.73.json",
@@ -247,7 +247,7 @@ function Show-Status {
         if ($sd -and $sd.DriveType -eq "Removable") {
             Write-Check "정상" "$SdDriveLetter`: SD카드 후보" "$($sd.FileSystem) 이동식 드라이브, 크기 $(Format-Size ([UInt64]$sd.Size))"
         } elseif ($sd) {
-            Write-Check "주의" "$SdDriveLetter`: 드라이브" "이동식 드라이브가 아닙니다. SD EEPROM 쓰기 전에 대상이 맞는지 확인하세요."
+            Write-Check "주의" "$SdDriveLetter`: 드라이브" "이동식 드라이브가 아닙니다. OS SD 쓰기 전에 대상이 맞는지 확인하세요."
         } else {
             $eepromVolume = Get-Volume -ErrorAction SilentlyContinue |
                 Where-Object {
@@ -260,9 +260,9 @@ function Show-Status {
                 Select-Object -First 1
             if ($eepromVolume) {
                 $letter = if ($eepromVolume.DriveLetter) { "$($eepromVolume.DriveLetter):" } else { "드라이브 문자 없음" }
-                Write-Check "정상" "EEPROM SD카드" "작은 FAT32 이동식 파티션 $(Format-Size ([UInt64]$eepromVolume.Size)) ($letter). Pi 4 EEPROM 이미지가 쓰인 상태로 보입니다."
+                Write-Check "정상" "SD카드 후보" "작은 FAT32 이동식 파티션 $(Format-Size ([UInt64]$eepromVolume.Size)) ($letter). 물리 디스크 선택 화면에서 최종 대상을 확인하세요."
             } else {
-                Write-Check "주의" "$SdDriveLetter`: SD카드" "현재 보이지 않습니다. SD EEPROM을 쓸 때 다시 꽂고 상태 확인을 다시 누르세요."
+                Write-Check "주의" "$SdDriveLetter`: SD카드" "현재 보이지 않습니다. OS SD를 쓸 때 다시 꽂고 상태 확인을 다시 누르세요."
             }
         }
     }
@@ -504,8 +504,30 @@ function Invoke-PrepareRpi4EepromSd {
     }
 }
 
+function Invoke-PrepareRpi4OsSd {
+    Assert-Admin
+    $cache = Get-ProjectDownloadCache
+    $targetText = if ($SdDiskNumber -ge 0) { "PhysicalDrive$SdDiskNumber" } else { "drive $SdDriveLetter`:" }
+    Invoke-Step "List disks before writing SD" {
+        Invoke-Tool "tools\rpi-sd-card.ps1" @("list", "-CacheDir", $cache)
+    }
+    if (-not (Confirm-Destructive "This will erase the selected SD target $targetText and write Raspberry Pi OS Lite 64-bit Trixie 2026-04-21. Use this OS SD to boot the Pi, confirm serial/MAC, and handle EEPROM/network-boot settings from the OS.")) {
+        Write-Host "Cancelled."
+        return
+    }
+    Invoke-Step "Write Raspberry Pi OS Lite 64-bit Trixie image to SD" {
+        $args = @("prepare-rpios-lite-trixie", "-CacheDir", $cache, "-IUnderstand")
+        if ($SdDiskNumber -ge 0) {
+            $args += @("-DiskNumber", ([string]$SdDiskNumber))
+        } else {
+            $args += @("-DriveLetter", $SdDriveLetter)
+        }
+        Invoke-Tool "tools\rpi-sd-card.ps1" $args
+    }
+}
+
 function Invoke-PrepareSd {
-    Invoke-PrepareRpi4EepromSd
+    Invoke-PrepareRpi4OsSd
 }
 
 function Invoke-SyncTftp {
@@ -584,7 +606,7 @@ function Show-Menu {
         Write-Host "1. Status / current state"
         Write-Host "2. Setup Windows server PC for 10.73 netboot"
         Write-Host "3. Start boot services"
-        Write-Host "4. Prepare RPi4 Network Boot EEPROM SD card"
+        Write-Host "4. Prepare Raspberry Pi OS Lite Trixie SD card"
         Write-Host "5. Prepare Zero 2 W SD boot + USB gadget SD"
         Write-Host "6. Verify lab / services / generated files"
         Write-Host "7. Show docs"
@@ -596,7 +618,7 @@ function Show-Menu {
                 "1" { Show-Status }
                 "2" { Invoke-ServerSetup }
                 "3" { Invoke-LiteProviderStart }
-                "4" { Invoke-PrepareRpi4EepromSd }
+                "4" { Invoke-PrepareRpi4OsSd }
                 "5" { Invoke-PrepareZero2WGadgetSd }
                 "6" { Invoke-Verify }
                 "7" { Open-Docs }
@@ -617,6 +639,7 @@ switch ($Task) {
     "status" { Show-Status }
     "server-setup" { Invoke-ServerSetup }
     "lite-provider-start" { Invoke-LiteProviderStart }
+    "prepare-rpi4-os-sd" { Invoke-PrepareRpi4OsSd }
     "prepare-rpi4-eeprom-sd" { Invoke-PrepareRpi4EepromSd }
     "prepare-sd" { Invoke-PrepareSd }
     "prepare-zero2w-gadget-sd" { Invoke-PrepareZero2WGadgetSd }

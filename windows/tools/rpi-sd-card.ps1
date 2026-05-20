@@ -1,6 +1,6 @@
 param(
     [Parameter(Position = 0, Mandatory = $true)]
-    [ValidateSet("list", "download-eeprom-network", "prepare-eeprom-network", "write-image")]
+    [ValidateSet("list", "download-eeprom-network", "prepare-eeprom-network", "download-rpios-lite-trixie", "prepare-rpios-lite-trixie", "write-image")]
     [string] $Command,
 
     [ValidateSet("pi4", "pi5")]
@@ -164,6 +164,99 @@ function Expand-ImageIfNeeded {
     }
 
     throw "Unsupported image type: $resolved. Use .img, .zip containing .img, or .img.xz."
+}
+
+function Get-PinnedRpiOsLiteTrixieImageName {
+    return "2026-04-21-raspios-trixie-arm64-lite.img"
+}
+
+function Get-CachedRpiOsLiteTrixieImage {
+    New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
+    $imageName = Get-PinnedRpiOsLiteTrixieImageName
+    $imagePath = Join-Path $CacheDir $imageName
+    if (Test-Path -LiteralPath $imagePath) {
+        return (Resolve-Path -LiteralPath $imagePath).Path
+    }
+
+    $archivePath = "$imagePath.xz"
+    if (Test-Path -LiteralPath $archivePath) {
+        return (Expand-ImageIfNeeded $archivePath)
+    }
+
+    return ""
+}
+
+function Get-OfficialRpiOsLiteTrixieEntry {
+    New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
+    $osListPath = Join-Path $CacheDir "os_list_imagingutility_v4.json"
+    Invoke-WebRequest -Uri $OsListUrl -OutFile $osListPath
+    $json = Get-Content -LiteralPath $osListPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $targetFile = "$(Get-PinnedRpiOsLiteTrixieImageName).xz"
+
+    function Walk-Items {
+        param($Items, [string] $Path)
+        foreach ($item in @($Items)) {
+            $newPath = if ($Path) { "$Path > $($item.name)" } else { [string]$item.name }
+            if ($item.url) {
+                [pscustomobject]@{
+                    Path = $newPath
+                    Name = $item.name
+                    Url = $item.url
+                    Description = $item.description
+                    ReleaseDate = $item.release_date
+                    ExtractSize = $item.extract_size
+                }
+            }
+            if ($item.subitems) {
+                Walk-Items $item.subitems $newPath
+            }
+        }
+    }
+
+    $entry = Walk-Items $json.os_list "" |
+        Where-Object {
+            $fileName = [IO.Path]::GetFileName(([Uri]$_.Url).AbsolutePath)
+            $fileName -eq $targetFile
+        } |
+        Select-Object -First 1
+
+    if (-not $entry) {
+        throw "Could not find pinned Raspberry Pi OS image in official OS list: $targetFile"
+    }
+    return $entry
+}
+
+function Save-RpiOsLiteTrixieImage {
+    $cached = Get-CachedRpiOsLiteTrixieImage
+    if (-not [string]::IsNullOrWhiteSpace($cached)) {
+        [pscustomobject]@{
+            Name = "Raspberry Pi OS Lite 64-bit Trixie"
+            Version = "2026-04-21"
+            Source = "cache"
+            Image = $cached
+            ImageSize = Format-Bytes ([UInt64](Get-Item -LiteralPath $cached).Length)
+        }
+        return
+    }
+
+    $entry = Get-OfficialRpiOsLiteTrixieEntry
+    $fileName = [IO.Path]::GetFileName(([Uri]$entry.Url).AbsolutePath)
+    $archivePath = Join-Path $CacheDir $fileName
+    if (-not (Test-Path -LiteralPath $archivePath)) {
+        Write-Host "Downloading Raspberry Pi OS Lite 64-bit Trixie 2026-04-21"
+        Write-Host $entry.Url
+        Invoke-WebRequest -Uri $entry.Url -OutFile $archivePath
+    }
+    $imagePath = Expand-ImageIfNeeded $archivePath
+    [pscustomobject]@{
+        Name = "Raspberry Pi OS Lite 64-bit Trixie"
+        Version = "2026-04-21"
+        Source = $entry.Path
+        ReleaseDate = $entry.ReleaseDate
+        Archive = $archivePath
+        Image = $imagePath
+        ImageSize = Format-Bytes ([UInt64](Get-Item -LiteralPath $imagePath).Length)
+    }
 }
 
 function Get-OfficialBootloaderEntry {
@@ -342,6 +435,13 @@ switch ($Command) {
     }
     "prepare-eeprom-network" {
         $download = Save-OfficialBootloaderImage $Model
+        Invoke-WriteImageCommand $download.Image
+    }
+    "download-rpios-lite-trixie" {
+        Save-RpiOsLiteTrixieImage | Format-List
+    }
+    "prepare-rpios-lite-trixie" {
+        $download = Save-RpiOsLiteTrixieImage
         Invoke-WriteImageCommand $download.Image
     }
     "write-image" {

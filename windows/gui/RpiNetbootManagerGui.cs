@@ -118,7 +118,7 @@ namespace RpiNetbootWindowsGui
         private bool isRunning;
         private string selectedTask = "status";
         private CloneRpi4Request pendingCloneRequest;
-        private EepromSdRequest pendingEepromSdRequest;
+        private SdImageWriteRequest pendingSdImageWriteRequest;
         private readonly bool autoRunInitialTask;
 
         private static readonly string UiFont = UiFonts.Family;
@@ -178,7 +178,7 @@ namespace RpiNetbootWindowsGui
             actions.Add(new ActionDefinition("server-setup", "서버 PC 준비", "선택한 저장소와 이더넷 10.73.0.10 구성을 자동으로 맞춥니다.", IconKind.Server, true));
             actions.Add(new ActionDefinition("lite-provider-start", "부팅 서비스 시작", "DHCP, TFTP, NFS 서비스를 시작해 RPi4 네트워크 부팅을 받을 준비를 합니다.", IconKind.Network, true));
             actions.Add(new ActionDefinition("clone-rpi4", "새 RPi4 등록/복제", "기기 번호, 시리얼, MAC을 입력해 새 RPi4의 bootfs/rootfs와 내부 설정을 만듭니다.", IconKind.Package, false));
-            actions.Add(new ActionDefinition("prepare-sd", "RPi4 EEPROM SD", "선택한 SD 디스크에 RPi4 Network Boot EEPROM 이미지를 씁니다.", IconKind.SdCard, true, true));
+            actions.Add(new ActionDefinition("prepare-sd", "RPi4 OS SD 작성", "선택한 SD 디스크에 Raspberry Pi OS Lite 64-bit Trixie 이미지를 씁니다.", IconKind.SdCard, true, true));
             actions.Add(new ActionDefinition("zero2w-gadget-sd", "Zero 2 W Gadget SD", "S: SD를 Zero 2 W USB Ethernet gadget 부팅용으로 패치합니다.", IconKind.SdCard, false, true));
             actions.Add(new ActionDefinition("docs", "도움말", "운영 절차와 복제 Runbook을 엽니다.", IconKind.Doc, false));
         }
@@ -660,7 +660,7 @@ namespace RpiNetbootWindowsGui
                 case "status": return "상태 확인 실행";
                 case "server-setup": return "서버 PC 준비";
                 case "lite-provider-start": return "서비스 시작";
-                case "prepare-sd": return "SD카드에 EEPROM 쓰기";
+                case "prepare-sd": return "OS SD 작성";
                 case "clone-rpi4": return "새 RPi4 복제 시작";
                 case "zero2w-gadget-sd": return "gadget SD 패치";
                 case "docs": return "도움말 열기";
@@ -672,7 +672,7 @@ namespace RpiNetbootWindowsGui
         {
             if (task == "prepare-sd")
             {
-                return "RPi4 전용입니다. 버튼을 누르면 현재 연결된 디스크 목록을 보여주고, 사용자가 선택한 디스크에만 EEPROM 이미지를 씁니다.\n\nboot/system 디스크, 미디어 없음, USB가 아닌 디스크, 64GB 초과 디스크는 선택할 수 없습니다.\n\n다음: RPi4를 이 SD카드로 한 번 부팅해 EEPROM을 업데이트합니다.";
+                return "RPi4 부팅용 Raspberry Pi OS SD를 만듭니다. 버튼을 누르면 현재 연결된 디스크 목록을 보여주고, 사용자가 선택한 디스크에만 Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지를 씁니다.\n\nboot/system 디스크, 미디어 없음, USB가 아닌 디스크, 64GB 초과 디스크는 선택할 수 없습니다.\n\n다음: RPi4를 이 OS SD로 부팅해 시리얼/MAC을 확인하고 EEPROM/network boot 설정을 진행합니다.";
             }
 
             switch (task)
@@ -683,8 +683,6 @@ namespace RpiNetbootWindowsGui
                     return "서버 PC를 네트워크 부팅용으로 맞춥니다. 저장소 설정에서 선택한 위치 아래에 tftp/rootfs/tools 구조를 확인하고 유선 이더넷을 10.73.0.10으로 적용합니다.\n\n다음: 부팅 서비스 시작을 누릅니다.";
                 case "lite-provider-start":
                     return "RPi4가 네트워크 부팅 요청을 보낼 때 응답할 DHCP/TFTP/NFS 서비스를 시작합니다.\n\n다음: 상태 확인을 누르고 새 RPi4 전원을 다시 넣습니다.";
-                case "prepare-sd":
-                    return "RPi4 전용입니다. S: SD카드만 지웁니다. 저장소 드라이브는 선택하면 안 됩니다.\n\n다음: RPi4를 이 SD카드로 한 번 부팅합니다. Zero 2 W용 SD는 별도 버튼을 쓰세요.";
                 case "clone-rpi4":
                     return "새 Raspberry Pi 4를 등록하고 현재 성공한 bootfs/rootfs에서 복제합니다.\n\n입력 예:\n- 기기 번호: rpi-001\n- 시리얼: 8자리 hex\n- MAC: 88:a2:9e:xx:xx:xx\n\n자동 반영:\n- " + GetConfiguredTftpRoot() + "\\<serial>\n- " + GetConfiguredRootfsRoot() + "\\<serial>\n- hostname\n- /etc/rpi-netboot/client.json\n- machine-id/SSH host key 초기화";
                 case "zero2w-gadget-sd":
@@ -750,10 +748,10 @@ namespace RpiNetbootWindowsGui
 
             if (action.Task == "prepare-sd")
             {
-                using (var dialog = new EepromSdDialog())
+                using (var dialog = new SdImageWriteDialog())
                 {
                     if (dialog.ShowDialog(this) != DialogResult.OK) return;
-                    pendingEepromSdRequest = dialog.Request;
+                    pendingSdImageWriteRequest = dialog.Request;
                 }
             }
 
@@ -776,7 +774,7 @@ namespace RpiNetbootWindowsGui
             }
             if (action.Task == "prepare-sd")
             {
-                pendingEepromSdRequest = null;
+                pendingSdImageWriteRequest = null;
             }
         }
 
@@ -801,9 +799,9 @@ namespace RpiNetbootWindowsGui
             switch (action.Task)
             {
                 case "prepare-sd":
-                    if (pendingEepromSdRequest == null) throw new InvalidOperationException("EEPROM SD target disk is missing.");
+                    if (pendingSdImageWriteRequest == null) throw new InvalidOperationException("OS SD target disk is missing.");
                     return commandPrefix + "& " + PsSingle(scriptPath) +
-                        " -Task prepare-sd -SdDiskNumber " + pendingEepromSdRequest.DiskNumber.ToString() +
+                        " -Task prepare-sd -SdDiskNumber " + pendingSdImageWriteRequest.DiskNumber.ToString() +
                         " -Yes 3>&1 4>&1 5>&1 6>&1";
                 case "zero2w-gadget-sd":
                     toolPath = Path.Combine(projectRoot, "tools", "zero2w-gadget-sd.ps1");
@@ -844,12 +842,12 @@ namespace RpiNetbootWindowsGui
 
         private string GetConfirmationText(ActionDefinition action)
         {
-            if (action.Task == "prepare-sd" && pendingEepromSdRequest != null)
+            if (action.Task == "prepare-sd" && pendingSdImageWriteRequest != null)
             {
-                return "RPi4 EEPROM SD를 만듭니다.\n\n대상: " + pendingEepromSdRequest.Summary +
-                       "\n실행 내용: Pi 4 Network Boot EEPROM 이미지 쓰기" +
+                return "RPi4 OS SD를 만듭니다.\n\n대상: " + pendingSdImageWriteRequest.Summary +
+                       "\n실행 내용: Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지 쓰기" +
                        "\n주의: 선택한 디스크 전체 내용 삭제" +
-                       "\n\n네트워크 부팅 대상은 RPi4만입니다. 계속하려면 [예]를 누르세요.";
+                       "\n\n이 SD로 Pi를 부팅한 뒤 시리얼/MAC 확인과 EEPROM/network boot 설정을 진행합니다. 계속하려면 [예]를 누르세요.";
             }
 
             switch (action.Task)
@@ -859,7 +857,7 @@ namespace RpiNetbootWindowsGui
                 case "lite-provider-start":
                     return "부팅 서비스를 시작합니다.\n\n실행 내용:\n- DHCP/TFTP 서버 시작\n- rootfs 서비스 시작\n- DHCP/TFTP/NFS 방화벽 규칙 확인\n\nPi가 다음 DHCP에서 예약 IP를 받게 됩니다. 계속하려면 [예]를 누르세요.";
                 case "prepare-sd":
-                    return "RPi4 EEPROM SD를 만듭니다.\n\n대상: S:\n실행 내용: Pi 4 Network Boot EEPROM 이미지 쓰기\n주의: S:의 모든 내용 삭제\n\n네트워크 부팅 대상은 RPi4만입니다. 계속하려면 [예]를 누르세요.";
+                    return "RPi4 OS SD를 만듭니다.\n\n실행 내용: Raspberry Pi OS Lite 64-bit Trixie 2026-04-21 이미지 쓰기\n주의: 선택한 디스크 전체 내용 삭제\n\n계속하려면 [예]를 누르세요.";
                 case "zero2w-gadget-sd":
                     return "Zero 2 W USB gadget SD를 패치합니다.\n\n대상: S:\n변경 파일: config.txt, cmdline.txt, user-data, ssh marker\n주의: Zero 2 W는 SD로 부팅합니다. RPi4 네트워크 부팅 대상에 넣지 않습니다.\n\nS:가 Zero 2 W용 OS SD이면 [예]를 누르세요.";
                 default:
@@ -1239,7 +1237,7 @@ namespace RpiNetbootWindowsGui
         public string Ip;
     }
 
-    internal sealed class EepromSdRequest
+    internal sealed class SdImageWriteRequest
     {
         public int DiskNumber;
         public string Summary;
@@ -1316,7 +1314,7 @@ namespace RpiNetbootWindowsGui
         }
     }
 
-    internal sealed class EepromSdDialog : Form
+    internal sealed class SdImageWriteDialog : Form
     {
         private static readonly string UiFont = UiFonts.Family;
         private readonly DataGridView grid;
@@ -1324,11 +1322,11 @@ namespace RpiNetbootWindowsGui
         private readonly Button okButton;
         private List<SdDiskRow> rows = new List<SdDiskRow>();
 
-        public EepromSdRequest Request { get; private set; }
+        public SdImageWriteRequest Request { get; private set; }
 
-        public EepromSdDialog()
+        public SdImageWriteDialog()
         {
-            Text = "EEPROM SD 대상 디스크 선택";
+            Text = "OS SD 대상 디스크 선택";
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -1353,7 +1351,7 @@ namespace RpiNetbootWindowsGui
             root.Controls.Add(header, 0, 0);
 
             var title = new Label();
-            title.Text = "RPi4 EEPROM 이미지를 쓸 디스크 선택";
+            title.Text = "Raspberry Pi OS 이미지를 쓸 디스크 선택";
             title.ForeColor = Color.FromArgb(26, 33, 30);
             title.Font = new Font(UiFont, 15.5f, FontStyle.Bold);
             title.Dock = DockStyle.Top;
@@ -1405,7 +1403,7 @@ namespace RpiNetbootWindowsGui
             buttons.WrapContents = false;
             root.Controls.Add(buttons, 0, 3);
 
-            okButton = CreateDialogButton("선택한 디스크에 쓰기", Color.FromArgb(168, 88, 20), Color.White, 162);
+            okButton = CreateDialogButton("OS 이미지 쓰기", Color.FromArgb(168, 88, 20), Color.White, 162);
             okButton.Click += delegate { Submit(); };
             buttons.Controls.Add(okButton);
             AcceptButton = okButton;
@@ -1512,7 +1510,7 @@ namespace RpiNetbootWindowsGui
             if (selected.IsSafe)
             {
                 messageLabel.ForeColor = Color.FromArgb(116, 58, 0);
-                messageLabel.Text = "선택됨: " + selected.Summary + "  -  이 디스크 전체가 지워집니다.";
+                messageLabel.Text = "선택됨: " + selected.Summary + "  -  Raspberry Pi OS를 쓰며 디스크 전체가 지워집니다.";
             }
             else
             {
@@ -1542,7 +1540,7 @@ namespace RpiNetbootWindowsGui
                 UpdateSelectionMessage();
                 return;
             }
-            Request = new EepromSdRequest
+            Request = new SdImageWriteRequest
             {
                 DiskNumber = selected.DiskNumber,
                 Summary = selected.Summary
