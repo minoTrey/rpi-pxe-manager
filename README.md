@@ -8,6 +8,28 @@
 
 여러 라즈베리파이를 SD카드 없이 네트워크 부팅으로 운영하는 통합 관리 시스템입니다.
 
+## 버전 선택
+
+이 저장소는 Linux 서버용 기존 버전과 Windows 서버 PC용 새 버전을 함께 관리합니다.
+
+| 버전 | 위치 | 대상 |
+| --- | --- | --- |
+| Linux 버전 | 저장소 루트의 `pxe`, `pxe_gui_qt.py` | Ubuntu/Debian 서버에서 dnsmasq, TFTP, NFS로 Raspberry Pi를 부팅 |
+| Windows 버전 | `windows/` | Windows 서버 PC에서 한글 GUI로 Raspberry Pi 4 네트워크 부팅 서버를 준비 |
+
+Windows판은 Raspberry Pi 4만 네트워크 부팅 대상으로 다룹니다. Raspberry Pi Zero 2 W는 네트워크 부팅 대상이 아니라 SD 부팅 + USB gadget mode 장치로 분리합니다.
+
+### Windows 버전 빠른 시작
+
+```text
+cd windows
+RPI-Netboot-Manager.exe
+```
+
+관리자 권한이 필요한 서버 설정, 부팅 서비스 시작, SD카드 쓰기는 Windows판 GUI에서 관리자 실행을 안내합니다.
+
+현재 Windows판 테스트 상태는 `windows/docs/project-memory.md`와 `windows/docs/current-test-status-ko.md`에 기록합니다.
+
 ## 주요 기능
 
 - **CLI / GUI 지원** - 터미널 또는 그래픽 인터페이스 선택

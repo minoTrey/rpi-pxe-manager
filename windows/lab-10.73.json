@@ -1,0 +1,33 @@
+{
+    "name":  "rpi-netboot-windows",
+    "method":  "windows-lite-nfs",
+    "server_ip":  "10.73.0.10",
+    "router_ip":  "10.73.0.1",
+    "dns_server":  "10.73.0.1",
+    "subnet_mask":  "255.255.255.0",
+    "dhcp_start":  "10.73.0.100",
+    "dhcp_end":  "10.73.0.199",
+    "discovery_start":  "10.73.0.180",
+    "discovery_end":  "10.73.0.199",
+    "provision_port":  8088,
+    "project_root":  "D:\\",
+    "tftp_root":  "D:\\tftp",
+    "nfs_root":  "D:\\rootfs",
+    "nfs_alias":  "/rpi",
+    "iscsi_root":  "D:\\iscsi",
+    "vhdx_size_gb":  32,
+    "clients":  [
+                    {
+                        "serial":  "d80c0b88",
+                        "mac":  "88:a2:9e:4f:a9:b1",
+                        "ip":  "10.73.0.155",
+                        "hostname":  "d80c0b88",
+                        "model":  "pi4",
+                        "boot_mode":  "nfs",
+                        "tftp_prefix":  "d80c0b88",
+                        "iscsi_target_name":  "rpi-d80c0b88",
+                        "iscsi_initiator_iqn":  "iqn.1993-08.org.debian:01:d80c0b88",
+                        "root_uuid":  ""
+                    }
+                ]
+}

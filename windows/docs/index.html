@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RPI Netboot Manager 도움말</title>
+  <style>
+    :root {
+      --bg: #f6f8f9;
+      --surface: #ffffff;
+      --ink: #1d2529;
+      --muted: #5c6870;
+      --line: #d8e0e4;
+      --primary: #0f766e;
+      --soft: #e4f4f1;
+      --warn: #a15c07;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.6 "Segoe UI", "Malgun Gothic", Arial, sans-serif;
+    }
+
+    header {
+      background: #17211f;
+      color: #fff;
+      padding: 28px clamp(20px, 5vw, 56px);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 48px);
+      letter-spacing: 0;
+      line-height: 1.12;
+    }
+
+    header p {
+      max-width: 820px;
+      margin: 12px 0 0;
+      color: #c6d4d0;
+      font-size: 17px;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+
+    section {
+      margin: 26px 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card, .step, .note {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .card h3, .step strong {
+      display: block;
+      margin: 0 0 8px;
+      font-size: 17px;
+    }
+
+    .card p, .step p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .steps {
+      display: grid;
+      gap: 10px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 56px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .num {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      background: var(--soft);
+      color: var(--primary);
+      font-weight: 800;
+    }
+
+    .note {
+      border-color: #eed9ad;
+      background: #fff9ed;
+    }
+
+    .note strong { color: var(--warn); }
+
+    code {
+      background: #edf2f3;
+      border-radius: 6px;
+      padding: 2px 6px;
+      font-family: Consolas, monospace;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 820px) {
+      .grid { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 44px minmax(0, 1fr); }
+      .num { width: 36px; height: 36px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>RPI Netboot Manager</h1>
+    <p>Windows PC에서 RPi4 네트워크 부팅을 운영하기 위한 단일 실행 프로그램입니다. 실행 파일은 <code>RPI-Netboot-Manager.exe</code> 하나만 사용합니다.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>기준 환경</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>서버 PC</h3>
+          <p>유선 이더넷은 <code>10.73.0.10/24</code>, 공유기는 <code>10.73.0.1</code> 기준입니다.</p>
+        </div>
+        <div class="card">
+          <h3>저장소</h3>
+          <p>선택한 저장소 아래 <code>tftp</code>에는 부팅 파일, <code>rootfs</code>에는 Pi별 rootfs를 둡니다.</p>
+        </div>
+        <div class="card">
+          <h3>대상 장비</h3>
+          <p>네트워크 부팅 대상은 RPi4입니다. Zero 2 W는 별도 SD + USB gadget 흐름으로 관리합니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>버튼 순서</h2>
+      <div class="steps">
+        <div class="step"><span class="num">1</span><div><strong>상태 확인</strong><p>PC, 저장소, 네트워크, 서비스 포트, 등록된 RPi4 정보를 읽기 전용으로 확인합니다.</p></div></div>
+        <div class="step"><span class="num">2</span><div><strong>서버 PC 준비</strong><p>설정된 저장소 폴더 구조와 유선 이더넷 설정을 RPi4 부팅용으로 맞춥니다.</p></div></div>
+        <div class="step"><span class="num">3</span><div><strong>부팅 서비스 시작</strong><p>DHCP, TFTP, rootfs 서비스를 시작해 RPi4가 네트워크 부팅 요청을 보낼 수 있게 합니다.</p></div></div>
+        <div class="step"><span class="num">4</span><div><strong>새 RPi4 등록/복제</strong><p>기기 번호, serial, MAC을 입력해 새 장비의 bootfs/rootfs 구조와 설정을 만듭니다.</p></div></div>
+        <div class="step"><span class="num">5</span><div><strong>RPi4 OS SD 작성</strong><p>Raspberry Pi OS Lite 64-bit Trixie SD를 만들고 OS 부팅에서 시리얼/MAC과 EEPROM 설정을 확인합니다.</p></div></div>
+        <div class="step"><span class="num">6</span><div><strong>Zero 2 W Gadget SD</strong><p>Zero 2 W용 SD 부팅과 USB Ethernet gadget 설정을 준비합니다.</p></div></div>
+        <div class="step"><span class="num">7</span><div><strong>도움말</strong><p>이 문서와 운영 절차 문서를 엽니다.</p></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>현재 집중할 일</h2>
+      <div class="note">
+        <strong>첫 RPi4 rootfs를 완성하는 것이 핵심입니다.</strong>
+        <p><code>&lt;저장소&gt;\tftp\d80c0b88</code> 부팅 파일은 준비되어 있고, 다음 단계는 <code>&lt;저장소&gt;\rootfs\d80c0b88</code>를 실제 Linux rootfs로 채운 뒤 RPi4 전원을 다시 넣어 DHCP, TFTP, NFS 부팅 흐름을 확인하는 것입니다.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>문제 확인 순서</h2>
+      <div class="grid">
+        <div class="card"><h3>IP 충돌</h3><p>Wi-Fi와 유선 이더넷이 같은 대역을 쓰지 않는지 확인합니다.</p></div>
+        <div class="card"><h3>포트 점유</h3><p>UDP 67, UDP 69, TCP 2049를 다른 서비스가 잡고 있으면 부팅 서비스 시작 전 정리합니다.</p></div>
+        <div class="card"><h3>rootfs</h3><p><code>etc</code>, <code>usr</code>, <code>bin</code>, <code>sbin</code> 구조가 Pi별 rootfs 폴더 안에 있어야 합니다.</p></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

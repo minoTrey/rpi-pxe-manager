@@ -1,0 +1,40 @@
+상태 확인은 Raspberry Pi 네트워크 부팅 전에 필요한 5가지를 봅니다.
+1. D: 저장소와 S: SD카드
+2. 서버 PC 이더넷 IP와 공유기 연결
+3. lab 설정 파일과 TFTP/rootfs 폴더
+4. DHCP/TFTP/NFS 서비스 포트
+5. 지금 다음에 눌러야 할 버튼
+
+== 1. 저장소 / SD카드 ==
+[정상] D: 저장소 - 라벨 rpi, NTFS, 고정 디스크, 남은 공간 118.9GB
+[정상] S: SD카드 후보 - FAT32 이동식 드라이브, 크기 29.7GB
+
+== 2. 네트워크 ==
+[정상] 서버 IP - 이더넷에 10.73.0.10/24 적용됨
+[정상] 공유기 연결 - 10.73.0.1 ping 성공
+[정상] 인터넷용 Wi-Fi - 172.30.1.5 사용 중
+
+== 3. 설정 / 폴더 ==
+[정상] lab 설정 - 등록된 Pi 클라이언트 60대, 서버 IP 10.73.0.10, 공유기 10.73.0.1
+[정상] D:\tftp - 폴더 있음
+[정상] D:\rootfs - 폴더 있음
+[정상] D:\iscsi - 폴더 있음
+[정상] D:\downloads - 폴더 있음
+[정상] TFTP 클라이언트 폴더 - 60개. 각 Pi serial별 폴더입니다.
+[주의] rootfs 클라이언트 폴더 - 60개. 폴더는 있지만 실제 Linux rootfs 파일은 아직 별도 복제가 필요합니다.
+[필요] TFTP 실제 부팅 파일 - 현재 cmdline/config 중심입니다. 첫 Pi의 boot partition 파일을 D:\tftp\<serial>에 채워야 합니다.
+
+== 4. 부팅 서비스 포트 ==
+[필요] DHCP UDP 67 - 아직 대기 중인 서비스가 없습니다. haneWIN DHCP 설치/설정이 필요합니다.
+[필요] TFTP UDP 69 - 아직 대기 중인 서비스가 없습니다. haneWIN TFTP 설치/설정이 필요합니다.
+[필요] NFS TCP 2049 - 아직 대기 중인 서비스가 없습니다. rootfs 부팅에는 NFS 설정이 필요합니다.
+[주의] iSCSI TCP 3260 - 현재 NFS 방식이면 필수는 아닙니다.
+
+== 5. 다음에 할 일 ==
+[주의] 관리자 권한 - 설치/SD 쓰기/방화벽 작업을 누르면 관리자 모드로 다시 열어야 합니다.
+권장 순서:
+1. haneWIN 서비스 설치 버튼으로 DHCP/TFTP/NFS 도구 설치
+2. SD카드에 EEPROM 쓰기 버튼으로 Pi 4 network boot EEPROM 준비
+3. 첫 Pi의 boot partition 파일을 D:\tftp\<serial>에 복사
+4. 첫 Pi의 rootfs를 D:\rootfs\<serial>에 Linux helper로 복제
+5. 전체 상태 다시 확인 후 Pi 한 대만 네트워크 부팅 테스트

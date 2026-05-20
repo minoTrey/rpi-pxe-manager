@@ -35,3 +35,12 @@ __pycache__/
 *_patch.py
 *_updated.py
 # Client data (personal)
+
+# Windows build artifacts
+windows/*.exe
+windows/cache/
+windows/cache-os-list.json
+windows/generated/
+windows/format-d-ntfs.log
+windows/**/bin/
+windows/**/obj/
